@@ -1,48 +1,123 @@
+import os
+import requests
 from appium import webdriver
 from appium.options.android import UiAutomator2Options
-import subprocess
+from EmulatorAuthConfigManager import EmulatorAuthConfigManager
 import time
+import socket
 import logging
 import threading
+import subprocess
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 
-
+lock = threading.Lock()
 
 class AndroidDriverManager:
-    def __init__(self, local_ip="127.0.0.1", port=4723, telegram_app_package=None):
+    def __init__(self, local_ip: str, port: int, emulator_auth_config_manager: EmulatorAuthConfigManager):
         self.local_ip = local_ip
         self.port = port
-        self.telegram_app_package = telegram_app_package
+        self.emulator_auth_config_manager = emulator_auth_config_manager
         self.driver = None
         self.process = None
 
+
+    def is_port_free(self, port):
+        """
+        Проверяет, свободен ли порт.
+        """
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(("", port))
+                return True
+            except OSError:
+                return False
+
+
+    def free_port(self, port):
+        """
+        Освобождает занятый порт (только для Windows и Unix-подобных систем).
+        """
+        thread_name = threading.current_thread().name
+
+        try:
+            if os.name == 'nt':  # Windows
+                command = f"netstat -ano | findstr :{port}"
+                result = subprocess.run(command, shell=True, capture_output=True, text=True)
+                if result.stdout.strip():
+                    pids = [line.split()[-1] for line in result.stdout.strip().splitlines()]
+                    for pid in pids:
+                        subprocess.run(f"taskkill /PID {pid} /F", shell=True)
+                    logging.info(f"[{thread_name}] Порт {port} успешно освобождён.")
+                else:
+                    logging.info(f"[{thread_name}] Порт {port} уже свободен.")
+            else:  # Unix-like systems
+                command = f"lsof -t -i:{port}"
+                result = subprocess.run(command, shell=True, capture_output=True, text=True)
+                if result.stdout.strip():
+                    pids = result.stdout.strip().splitlines()
+                    for pid in pids:
+                        subprocess.run(f"kill -9 {pid.strip()}", shell=True)
+                    logging.info(f"[{thread_name}] Порт {port} успешно освобождён.")
+                else:
+                    logging.info(f"[{thread_name}] Порт {port} уже свободен.")
+        except Exception as e:
+            logging.warning(f"[{thread_name}] Ошибка при освобождении порта {port}: {e}")
+
+
+    def ensure_port_available(self):
+        """
+        Проверяет доступность порта и освобождает его, если необходимо.
+        """
+        thread_name = threading.current_thread().name
+
+        while not self.is_port_free(self.port):
+            logging.warning(f"[{thread_name}] Порт {self.port} занят. Попытка освобождения...")
+            self.free_port(self.port)
+
+            if not self.is_port_free(self.port):
+                logging.error(f"[{thread_name}] Порт {self.port} не удалось освободить. Проверьте вручную.")
+                return
+
+        logging.error(f"[{thread_name}] Порт {self.port} свободен!")
 
 
     def start_appium_server(self):
         """
         Запускает сервер Appium на указанном порту.
         """
+        thread_name = threading.current_thread().name
 
-        log_filename = f"appium_server_{self.port}.log"  # Уникальное имя файла логов для каждого порта
-        log_file = open(log_filename, "w")  # Открыть файл для записи логов
+        with lock:
+            self.ensure_port_available()
 
-        command = f"appium --port {self.port} --log-level info"
+            log_filename = f"appium_server_{self.port}.log"  # Уникальное имя файла логов для каждого порта
+            log_file = open(log_filename, "w")  # Открыть файл для записи логов
+
+            command = f"appium --port {self.port} --log-level info"
+            try:
+                self.process = subprocess.Popen(
+                    command,
+                    shell=True,
+                    stdout=log_file,
+                    stderr=subprocess.STDOUT  # Перенаправить stderr в stdout
+                )
+                logging.info(f"[{thread_name}] Appium сервер запущен на порту {self.port}.")
+                time.sleep(3)  # Ждём несколько секунд для инициализации сервера
+            except Exception as e:
+                logging.error(f"[{thread_name}] Не удалось запустить Appium сервер на порту {self.port}: {e}")
+                self.process = None
+
+
+    def is_appium_server_running(self, url):
         try:
-            self.process = subprocess.Popen(
-                command,
-                shell=True,
-                stdout=log_file,
-                stderr=subprocess.STDOUT  # Перенаправить stderr в stdout
-            )
-            logging.info(f"Appium сервер запущен на порту {self.port}.")
-            time.sleep(5)  # Ждём несколько секунд для инициализации сервера
-        except Exception as e:
-            logging.error(f"Не удалось запустить Appium сервер на порту {self.port}: {e}")
-            self.process = None
+            response = requests.get(url + "/status")
+            return response.status_code == 200
+        except requests.exceptions.RequestException:
+            return False
 
 
     def get_ui_automator2_options(self, device_name, platform_version):
@@ -52,36 +127,67 @@ class AndroidDriverManager:
 
         options.platformName = "Android"
         options.automationName = "UiAutomator2"
-        options.platformVersion = "11"
         options.ignoreUnimportantViews = True
         options.disableWindowAnimation = True
-        options.appPackage = self.telegram_app_package
         options.noReset = True
 
         return options
 
 
-    def create_driver(self, device_name, platform_version="11"):
+    @staticmethod
+    def execute_adb_command(command):
+        thread_name = threading.current_thread().name
+
+        with lock:
+            try:
+                result = subprocess.run(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                return result.stdout.strip()
+            except Exception as e:
+                logging.error(f"[{thread_name}] Ошибка при выполнении команды: {command}. {e}")
+                return ""
+
+
+    def create_driver(self, avd_name, emulator_port, platform_version: str="9"):
+        thread_name = threading.current_thread().name
+
         appium_server_url = f"http://{self.local_ip}:{self.port}"
 
-        options = self.get_ui_automator2_options(device_name, platform_version)
+        if not self.is_appium_server_running(appium_server_url):
+            raise RuntimeError(f"[{thread_name}] Appium сервер на {appium_server_url} не запущен.")
+
+        # Проверяем подключение эмулятора через ADB
+        if not self.is_device_connected_adb(emulator_port):
+            raise RuntimeError(f"[{thread_name}] Устройство emulator-{emulator_port} не подключено через ADB.")
+
+        options = self.get_ui_automator2_options(avd_name, platform_version)
 
         try:
             self.driver = webdriver.Remote(command_executor=appium_server_url, options=options)
-
             return self.driver
         except Exception as e:
-            print(f"Ошибка при создании драйвера: {e}")
+            print(f"[{thread_name}] Ошибка при создании драйвера: {e}")
 
 
-    @staticmethod
-    def execute_adb_command(command):
-        try:
-            result = subprocess.run(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            return result.stdout.strip()
-        except Exception as e:
-            print(f"Ошибка при выполнении команды: {command}. {e}")
-            return ""
+    def is_device_connected_adb(self, emulator_port):
+        """
+        Проверяет, подключен ли эмулятор на указанном порту через ADB.
+        """
+        thread_name = threading.current_thread().name
+        device_id = f"emulator-{emulator_port}"
+
+
+        logging.info(f"[{thread_name}] Проверка подключения устройства {device_id} через ADB...")
+        adb_output = self.execute_adb_command("adb devices")
+        connected_devices = [
+            line.split()[0] for line in adb_output.splitlines() if "device" in line
+        ]
+
+        if device_id in connected_devices:
+            logging.info(f"[{thread_name}] Устройство {device_id} подключено.")
+            return True
+        else:
+            logging.warning(f"[{thread_name}] Устройство {device_id} не подключено.")
+            return False
 
 
     def ensure_adb_connection(self):
@@ -98,8 +204,10 @@ class AndroidDriverManager:
         """
         Останавливает сервер Appium.
         """
+        thread_name = threading.current_thread().name
+
         if self.process:
             self.process.terminate()
             self.process.wait()
-            logging.info(f"[{threading.current_thread().name}] Appium сервер на порту {self.port} остановлен.")
+            logging.info(f"[{thread_name}] Appium сервер на порту {self.port} остановлен.")
             self.process = None

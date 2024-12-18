@@ -21,22 +21,26 @@ class EmulatorAuthConfigManager:
             json.dump(config, f, ensure_ascii=False, indent=4)
 
     def is_authorized(self, avd_name):
+        """Проверяем, авторизован ли эмулятор в мобильном приложении Telegram."""
         with self.lock:
             config = self._read_config()
         return config.get(avd_name, {}).get("authorized", False)
 
     def mark_as_authorized(self, avd_name):
+        """Помечаем эмулятор как авторизованный."""
         with self.lock:
             config = self._read_config()
             config[avd_name] = {"authorized": True}
             self._write_config(config)
 
     def was_started(self, avd_name):
+        """Проверяем, был ли ранее запущен эмулятор (прогрузился ли он до рабочего стола)."""
         with self.lock:
             config = self._read_config()
         return avd_name in config
 
     def mark_as_started(self, avd_name):
+        """Помечаем эмулятор как хотя бы один раз прогрузившийся до рабочего стола."""
         with self.lock:
             config = self._read_config()
             if avd_name not in config:

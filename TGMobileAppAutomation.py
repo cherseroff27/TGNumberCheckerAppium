@@ -10,7 +10,7 @@ from MobileElementsHandler import MobileElementsHandler as Meh
 
 class TelegramMobileAppAutomation:
     def __init__(self, driver, avd_name, emulator_auth_config_manager, excel_processor):
-        self.driver = None
+        self.driver = driver
         self.emulator_auth_config_manager = emulator_auth_config_manager
         self.excel_processor = excel_processor
         self.avd_name = avd_name
@@ -38,8 +38,10 @@ class TelegramMobileAppAutomation:
 
 
     def send_message_with_phone_number(self, phone_number):
-        ManualScriptControl.wait_for_user_input(f"[{self.avd_name}]: Загрузился в эмулятор")
+        # Запуск настроек для теста
+        self.driver.activate_app("com.android.settings")
 
+        ManualScriptControl.wait_for_user_input(f"[{self.avd_name}]: Загрузился в эмулятор")
         try:
             navigation_menu_locator = "//android.widget.ImageView[@content-desc='Открыть меню навигации']"
             navigation_menu_el = Meh.wait_for_element_xpath(
