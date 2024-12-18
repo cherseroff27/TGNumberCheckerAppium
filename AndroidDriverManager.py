@@ -120,9 +120,10 @@ class AndroidDriverManager:
             return False
 
 
-    def get_ui_automator2_options(self, device_name, platform_version):
+    def get_ui_automator2_options(self, device_name, platform_version, emulator_port):
         options = UiAutomator2Options()
         options.deviceName = device_name
+        options.udid = f"emulator-{emulator_port}"
         options.platformVersion = platform_version
 
         options.platformName = "Android"
@@ -159,9 +160,10 @@ class AndroidDriverManager:
         if not self.is_device_connected_adb(emulator_port):
             raise RuntimeError(f"[{thread_name}] Устройство emulator-{emulator_port} не подключено через ADB.")
 
-        options = self.get_ui_automator2_options(avd_name, platform_version)
+        options = self.get_ui_automator2_options(avd_name, platform_version, emulator_port)
 
         try:
+            logging.info(f"[{thread_name}] Создаём драйвер для {avd_name} на emulator-{emulator_port} через {appium_server_url}")
             self.driver = webdriver.Remote(command_executor=appium_server_url, options=options)
             return self.driver
         except Exception as e:
