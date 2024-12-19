@@ -1,9 +1,9 @@
 import os
 import subprocess
-import sys
 import threading
 import time
 import logging
+
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -17,24 +17,12 @@ class EmulatorManager:
 
 
     @staticmethod
-    def update_progress(progress, total, message=""):
-        """
-        Обновляет строку прогресса в терминале.
-        :param progress: Текущий прогресс (например, количество завершённых шагов)
-        :param total: Общее количество шагов
-        :param message: Сообщение, которое будет отображаться
-        """
-        percent = int((progress / total) * 100)
-        bar = f"[{'#' * (percent // 2)}{'-' * (50 - (percent // 2))}] {percent}%"
-        sys.stdout.write(f"\r{message} {bar} {progress}/{total}")
-        sys.stdout.flush()
-
-
-    def _execute_command(self, command):
+    def _execute_command(command):
         """
         Выполняет системную команду с обработкой ошибок.
         """
         thread_name = threading.current_thread().name
+
         try:
             result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=True)
             if result.returncode == 0:
@@ -52,6 +40,7 @@ class EmulatorManager:
         Проверяет, существует ли эмулятор с указанным именем.
         """
         thread_name = threading.current_thread().name
+
         command = "emulator -list-avds"
         avd_list = self._execute_command(command)
         if avd_list:
@@ -79,7 +68,7 @@ class EmulatorManager:
         result = self._execute_command(create_command)
 
         if result is not None:
-            logging.info(f"[{thread_name}] Эмулятор {avd_name} успешно .")
+            logging.info(f"[{thread_name}] Эмулятор {avd_name} успешно создан.")
             return True
         else:
             logging.error(f"[{thread_name}] Не удалось создать эмулятор {avd_name}.")
@@ -141,29 +130,7 @@ class EmulatorManager:
                 logging.error(f"[{thread_name}] Не удалось загрузить системный образ {system_image}.")
 
 
-    def start_emulator_with_snapshot(self, avd_name, port, snapshot_name="default"):
-        command = f"emulator -avd {avd_name} -port {port} -snapshot {snapshot_name} -no-snapshot-save"
-        process = subprocess.Popen(command, shell=True)
-        logging.info(f"[{avd_name}] Эмулятор запущен с использованием снепшота '{snapshot_name}'.")
-        return process
-
-
-    def start_emulator(self, avd_name, port):
-        """
-        Запускает эмулятор на указанном ADB-порту.
-        """
-        thread_name = threading.current_thread().name
-        logging.info(f"[{thread_name}] Запускаем эмулятор {avd_name}...")
-        command = f"emulator -avd {avd_name} -port {port} -snapshot-save-on-exit"
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-        if process:
-            logging.info(f"[{thread_name}] Эмулятор {avd_name} успешно запущен на указанном ADB-порту {port}.")
-            return process
-        else:
-            raise RuntimeError(f"[{thread_name}] Не удалось запустить эмулятор {avd_name} на порту {port}.")
-
-
-    def wait_for_emulator_ready(self, port, avd_ready_timeout=600):
+    def wait_for_emulator_ready(self, emulator_port, avd_ready_timeout=600, avd_name=None):
         """
         Ожидает готовности эмулятора.
         """
@@ -172,53 +139,17 @@ class EmulatorManager:
 
         start_time = time.time()
         while time.time() - start_time < avd_ready_timeout:
-            boot_status = self._execute_command(f"adb -s emulator-{port} shell getprop sys.boot_completed")
+            self._execute_command(f"adb -s emulator-{emulator_port} wait-for-device")
+            boot_status = self._execute_command(f"adb -s emulator-{emulator_port} shell getprop sys.boot_completed")
             if boot_status == "1":
                 logging.info(f"[{thread_name}] Эмулятор готов к работе.")
                 return True
             else:
-                logging.error(f"[{thread_name}] Эмулятор пока еще не готов к работе. Ожидаем...")
+                logging.error(f"[{thread_name}] [{avd_name}] Эмулятор пока еще не готов к работе. Ожидаем...")
             time.sleep(20)
-        logging.error(f"[{thread_name}] Эмулятор не стал готов к работе в отведённое время.")
+        logging.error(f"[{thread_name}] [{avd_name}] Эмулятор не стал готов к работе"
+                      f"за отведённое время: {avd_ready_timeout} секунд.")
         return False
-
-
-    def start_or_create_emulator(
-            self,
-            avd_name:str,
-            port: int,
-            system_image: str,
-            ram_size: str,
-            disk_size: str,
-            avd_ready_timeout: int):
-        """
-        Создаёт или запускает эмулятор, ожидая его готовности.
-        """
-        thread_name = threading.current_thread().name
-
-        try:
-            # Проверяем, существует ли эмулятор, и создаём его при отсутствии.
-            if not self._check_if_emulator_exists(avd_name):
-                logging.info(f"[{thread_name}] Эмулятор {avd_name} отсутствует. Создаю новый эмулятор...")
-                if self._create_emulator(avd_name, system_image):
-                    self._update_avd_config(avd_name, ram_size=f"{ram_size}", disk_size=f"{disk_size}")
-                    logging.info(f"[{thread_name}] Эмулятор {avd_name} успешно создан.")
-            else:
-                logging.error(f"[{thread_name}] Не удалось создать эмулятор {avd_name}. Прерывание...")
-                return False
-
-            # Запускаем эмулятор.
-            self.start_emulator(avd_name, port)
-
-            # Ожидаем готовности.
-            if not self.wait_for_emulator_ready(port=port, avd_ready_timeout=avd_ready_timeout):
-                logging.error(f"[{thread_name}] Эмулятор {avd_name} не готов к работе.")
-                return False
-            return True
-
-        except Exception as e:
-            logging.error(f"[{thread_name}] Ошибка при создании или запуске эмулятора {avd_name}: {e}")
-            return False
 
 
     @staticmethod
@@ -227,7 +158,7 @@ class EmulatorManager:
         Настраивает драйвер Appium для взаимодействия с эмулятором.
         """
         android_driver_manager.start_appium_server()
-        # android_driver_manager.ensure_adb_connection()
+        android_driver_manager.ensure_adb_connection()
         driver = android_driver_manager.create_driver(
             avd_name=avd_name,
             emulator_port=emulator_port,
@@ -236,7 +167,105 @@ class EmulatorManager:
         return driver
 
 
-    def _update_avd_config(self, avd_name, ram_size="2048", disk_size="8192M"):
+    def start_or_create_emulator(
+            self,
+            avd_name:str,
+            emulator_port: int,
+            system_image: str,
+            ram_size: str,
+            disk_size: str,
+            avd_ready_timeout: int,
+    ):
+        """
+        Создаёт или запускает эмулятор, ожидая его готовности.
+        """
+        thread_name = threading.current_thread().name
+
+        try:
+            # Проверяем, существует ли эмулятор, и создаём его при отсутствии.
+            if not self._check_if_emulator_exists(avd_name):
+                logging.info(f"[{thread_name}] Поскольку эмулятор {avd_name} отсутствует в списке AVD - создаю новый эмулятор...")
+                if self._create_emulator(avd_name, system_image):
+                    self._update_avd_config(avd_name, ram_size=f"{ram_size}", disk_size=f"{disk_size}")
+                    logging.info(f"[{thread_name}] Эмулятор {avd_name} успешно создан.")
+            else:
+                logging.error(f"[{thread_name}] Не удалось создать эмулятор {avd_name}. Прерывание...")
+                return False
+
+            # Запускаем эмулятор.
+            self.start_emulator_with_optional_snapshot(avd_name, emulator_port)
+
+            return True
+
+        except Exception as e:
+            logging.error(f"[{thread_name}] Ошибка при создании или запуске эмулятора {avd_name}: {e}")
+            return False
+
+
+    def start_emulator_with_optional_snapshot(self, avd_name, emulator_port):
+        """
+        Универсальный метод для запуска эмулятора с возможностью загрузки/создания снепшота.
+        """
+        thread_name = threading.current_thread().name
+        snapshots_dir = os.path.expanduser(f"~/.android/avd/{avd_name}.avd/snapshots/")
+
+        # Определение самого актуального снепшота
+        latest_snapshot = None
+        if os.path.exists(snapshots_dir):
+            snapshots = [f for f in os.listdir(snapshots_dir) if os.path.isdir(os.path.join(snapshots_dir, f))]
+            if snapshots:
+                latest_snapshot = max(snapshots, key=lambda snap: os.path.getmtime(os.path.join(snapshots_dir, snap)))
+                logging.info(f"[{thread_name}] Найден самый актуальный снепшот: {latest_snapshot}.")
+
+        # Формирование команды для запуска эмулятора
+        snapshot_command = f"emulator -avd {avd_name} -port {emulator_port} -gpu auto"
+        if latest_snapshot:
+            snapshot_command += f" -snapshot {latest_snapshot}"
+            logging.info(f"[{thread_name}] Используем снепшот '{latest_snapshot}' для запуска эмулятора.")
+        else:
+            logging.info(f"[{thread_name}] Снепшоты отсутствуют. Эмулятор будет запущен без снепшота.")
+
+        # Запуск эмулятора
+        process = subprocess.Popen(snapshot_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+        logging.info(f"[{thread_name}] Эмулятор {avd_name} запущен. Ожидание загрузки...")
+
+        if not self.wait_for_emulator_ready(emulator_port):
+            logging.error(f"[{thread_name}] Эмулятор {avd_name} не стал готов к работе.")
+            process.terminate()
+            return False
+
+        return process
+
+
+    @staticmethod
+    def save_snapshot(avd_name, emulator_port, snapshot_name):
+        """
+        Сохраняет снепшот эмулятора.
+        """
+        thread_name = threading.current_thread().name
+
+        command = f"adb -s emulator-{emulator_port} emu avd snapshot save {snapshot_name}"
+        result = subprocess.run(command, shell=True, capture_output=True)
+        if result.returncode == 0:
+            logging.info(f"[{thread_name}] [{avd_name}] Snapshot '{snapshot_name}' успешно сохранён.")
+        else:
+            logging.error(f"[{thread_name}] [{avd_name}] Ошибка сохранения snapshot '{snapshot_name}': {result.stderr.decode()}")
+
+
+    @staticmethod
+    def delete_snapshot(avd_name, emulator_port, snapshot_name):
+        thread_name = threading.current_thread().name
+
+        command = f"adb -s emulator-{emulator_port} emu avd snapshot delete {snapshot_name}"
+        result = subprocess.run(command, shell=True, capture_output=True)
+        if result.returncode == 0:
+            logging.info(f"[{thread_name}] [{avd_name}]: Snapshot '{snapshot_name}' успешно удалён.")
+        else:
+            logging.error(f"[{thread_name}] [{avd_name}]: Ошибка удаления snapshot '{snapshot_name}': {result.stderr.decode()}")
+
+
+    @staticmethod
+    def _update_avd_config(avd_name, ram_size="2048", disk_size="8192M"):
         """
         Обновляет параметры AVD после его создания: RAM, Disk Size, GPU.
         """
@@ -299,21 +328,3 @@ class EmulatorManager:
         except Exception as e:
             logging.error(f"[{thread_name}] Ошибка при удалении эмулятора {avd_name}: {e}")
             return False
-
-
-    def save_snapshot(self, avd_name, port, snapshot_name):
-        command = f"adb -s emulator-{port} emu avd snapshot save {snapshot_name}"
-        result = subprocess.run(command, shell=True, capture_output=True)
-        if result.returncode == 0:
-            logging.info(f"[{avd_name}] Снепшот '{snapshot_name}' успешно сохранён.")
-        else:
-            logging.error(f"[{avd_name}] Ошибка сохранения снепшота: {result.stderr.decode()}")
-
-
-    def delete_snapshot(self, avd_name, port, snapshot_name):
-        command = f"adb -s emulator-{port} emu avd snapshot delete {snapshot_name}"
-        result = subprocess.run(command, shell=True, capture_output=True)
-        if result.returncode == 0:
-            logging.info(f"[{avd_name}] Снепшот '{snapshot_name}' успешно удалён.")
-        else:
-            logging.error(f"[{avd_name}] Ошибка удаления снепшота: {result.stderr.decode()}")

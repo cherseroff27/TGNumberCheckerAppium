@@ -25,7 +25,21 @@ class AndroidDriverManager:
         self.process = None
 
 
-    def is_port_free(self, port):
+    @staticmethod
+    def execute_adb_command(command):
+        thread_name = threading.current_thread().name
+
+        with lock:
+            try:
+                result = subprocess.run(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                return result.stdout.strip()
+            except Exception as e:
+                logging.error(f"[{thread_name}] Ошибка при выполнении команды: {command}. {e}")
+                return ""
+
+
+    @staticmethod
+    def is_port_free(port):
         """
         Проверяет, свободен ли порт.
         """
@@ -37,7 +51,8 @@ class AndroidDriverManager:
                 return False
 
 
-    def free_port(self, port):
+    @staticmethod
+    def free_port(port):
         """
         Освобождает занятый порт (только для Windows и Unix-подобных систем).
         """
@@ -112,7 +127,8 @@ class AndroidDriverManager:
                 self.process = None
 
 
-    def is_appium_server_running(self, url):
+    @staticmethod
+    def is_appium_server_running(url):
         try:
             response = requests.get(url + "/status")
             return response.status_code == 200
@@ -120,7 +136,8 @@ class AndroidDriverManager:
             return False
 
 
-    def get_ui_automator2_options(self, device_name, platform_version, emulator_port):
+    @staticmethod
+    def get_ui_automator2_options(device_name, platform_version, emulator_port):
         options = UiAutomator2Options()
         options.deviceName = device_name
         options.udid = f"emulator-{emulator_port}"
@@ -133,19 +150,6 @@ class AndroidDriverManager:
         options.noReset = True
 
         return options
-
-
-    @staticmethod
-    def execute_adb_command(command):
-        thread_name = threading.current_thread().name
-
-        with lock:
-            try:
-                result = subprocess.run(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                return result.stdout.strip()
-            except Exception as e:
-                logging.error(f"[{thread_name}] Ошибка при выполнении команды: {command}. {e}")
-                return ""
 
 
     def create_driver(self, avd_name, emulator_port, platform_version: str="9"):
@@ -165,6 +169,8 @@ class AndroidDriverManager:
         try:
             logging.info(f"[{thread_name}] Создаём драйвер для {avd_name} на emulator-{emulator_port} через {appium_server_url}")
             self.driver = webdriver.Remote(command_executor=appium_server_url, options=options)
+
+
             return self.driver
         except Exception as e:
             print(f"[{thread_name}] Ошибка при создании драйвера: {e}")

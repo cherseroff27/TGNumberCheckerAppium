@@ -1,6 +1,5 @@
 import os
 import threading
-import time
 
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
@@ -11,9 +10,6 @@ from EmulatorAuthConfigManager import EmulatorAuthConfigManager
 from AndroidDriverManager import AndroidDriverManager
 from EmulatorManager import EmulatorManager
 
-from appium import webdriver
-
-from manual_script_control import ManualScriptControl
 
 import logging
 
@@ -62,38 +58,37 @@ def get_platform_version_from_system_image(system_image):
 
 def process_emulator(
         avd_name: str,
-        emulator_auth_config_manager: EmulatorAuthConfigManager,
-        platform_version: str,
-        excel_processor: ThreadSafeExcelProcessor,
-        system_image: str,
+        base_port: int,
         ram_size: str,
         disk_size: str,
+        system_image: str,
+        platform_version: str,
         avd_ready_timeout: int,
-        base_port: int,
+        excel_processor: ThreadSafeExcelProcessor,
+        emulator_auth_config_manager: EmulatorAuthConfigManager,
 ):
     """Запускает эмулятор и проверяет номера на зарегистрированность."""
     try:
         thread_name = threading.current_thread().name
         logging.info(f"[{thread_name}] Начинаем процесс запуска эмулятора {avd_name}...")
 
-
         emulator_port = base_port + avd_names.index(avd_name) * 2  # Расчет портов для эмулятора и Appium
         logging.info(f"[{thread_name}] [{avd_name}]: Назначаем порт {emulator_port} для эмулятора {avd_name}...")
         appium_port = 4723 + avd_names.index(avd_name) * 2
         logging.info(f"[{thread_name}] [{avd_name}]: Назначаем порт {appium_port} для Appium-сервера {avd_name}...")
 
-        # Инициализация и запуск эмулятора
+
+
+        # Инициализация и запуск эмулятора (если он ранее был запущен - используем snapshot)
         if emulator_auth_config_manager.was_started(avd_name):
             logging.info(f"[{thread_name}] Эмулятор {avd_name} уже был ранее запущен. Попробуем снова его стартовать.")
-            if not emulator_manager.start_emulator_with_snapshot(avd_name, emulator_port, snapshot_name="authorized"):
+            if not emulator_manager.start_emulator_with_optional_snapshot(avd_name, emulator_port):
                 raise RuntimeError(f"Не удалось перезапустить эмулятор {avd_name}.")
-            emulator_manager.wait_for_emulator_ready(emulator_port)
-            time.sleep(3)
         else:
             # Если эмулятор еще не был создан, создаем его
             if not emulator_manager.start_or_create_emulator(
                     avd_name=avd_name,
-                    port=emulator_port,
+                    emulator_port=emulator_port,
                     system_image=system_image,
                     ram_size=ram_size,
                     disk_size=disk_size,
@@ -106,9 +101,12 @@ def process_emulator(
                 raise RuntimeError(f"Не удалось запустить/создать эмулятор {avd_name}.")
             else:
                 emulator_auth_config_manager.mark_as_started(avd_name)
-                emulator_manager.save_snapshot(avd_name, emulator_port, snapshot_name="configured")
+                emulator_manager.save_snapshot(
+                    avd_name=avd_name,
+                    emulator_port=emulator_port,
+                    snapshot_name="configured"
+                )
                 logging.info(f"[{thread_name}] Эмулятор {avd_name} успешно подготовлен к работе!")
-                return
 
 
 
@@ -128,26 +126,43 @@ def process_emulator(
             if driver is None:
                 raise RuntimeError(f"[{thread_name}] Не удалось создать драйвер для {avd_name}.")
             else:
-                logging.info(f"[{thread_name}] Драйвер успешно инициализирован для:\n"
-                             f"avd_name: {avd_name} - emulator_port: {emulator_port}")
+                logging.info(f"[{thread_name}] Драйвер успешно инициализирован для: "
+                             f"[avd_name: {avd_name} - emulator_port: {emulator_port}]")
         except Exception as e:
             logging.error(f"[{thread_name}] Ошибка при инициализации драйвера для {avd_name}: {e}")
             return
 
 
 
-        if not emulator_auth_config_manager.is_authorized(avd_name):
-            ManualScriptControl.wait_for_user_input(f"Авторизуйтесь в Telegram на эмуляторе {avd_name} и нажмите Enter для продолжения.")
-
-            emulator_auth_config_manager.mark_as_authorized(avd_name)
-            emulator_manager.save_snapshot(avd_name, emulator_port, snapshot_name="authorized")
-
-        telegram_mobile_app_automation = TelegramMobileAppAutomation(
+        tg_mobile_app_automation = TelegramMobileAppAutomation(
             driver=driver,
             avd_name=avd_name,
-            emulator_auth_config_manager=emulator_auth_config_manager,
             excel_processor=excel_processor,
+            telegram_app_package="org.telegram.messenger.web",
+            emulator_auth_config_manager=emulator_auth_config_manager,
         )
+
+        apk_path = "telegram_apk/Telegram.apk"
+
+        tg_mobile_app_automation.install_apk(
+            app_package=tg_mobile_app_automation.telegram_app_package,
+            apk_path=apk_path
+        )
+
+        tg_mobile_app_automation.ensure_is_in_telegram_app()
+
+        if not emulator_auth_config_manager.is_authorized(avd_name):
+            logging.info(f"[{thread_name}] Авторизуйтесь в Telegram на эмуляторе {avd_name} и нажмите Enter для продолжения.")
+            input(f"[{thread_name}] Нажмите Enter после завершения авторизации в эмуляторе {avd_name}...\n")
+            emulator_manager.save_snapshot(
+                avd_name,
+                emulator_port,
+                snapshot_name="authorized"
+            )
+            logging.info(f"[{thread_name}] Снепшот 'authorized' в {avd_name} успешно сохранён после авторизации.")
+            emulator_auth_config_manager.mark_as_authorized(avd_name)
+            logging.info(f"[{thread_name}] Пометил {avd_name} как авторизованный!")
+
 
 
         while not excel_processor.is_numbers_ended:
@@ -158,7 +173,7 @@ def process_emulator(
             phone_number = row['Телефон Ответчика']
             logging.info(f"[{thread_name}] [{avd_name}]: Проверка номера: {phone_number}...")
 
-            if telegram_mobile_app_automation.send_message_with_phone_number(phone_number):
+            if tg_mobile_app_automation.send_message_with_phone_number(phone_number):
                 excel_processor.record_valid_number(row, avd_name)
                 logging.info(f"[{thread_name}] [{avd_name}]: Номер {phone_number} зарегистрирован.")
             else:
@@ -203,21 +218,22 @@ if __name__ == "__main__":
     # Скачивание общего для всех потоков образа один раз перед началом многопоточной обработки
     logging.info(f"[{thread_name}] Проверка и скачивание {system_image} перед запуском потоков...")
     emulator_manager._download_system_image(system_image)
+    logging.info(f"[{thread_name}] Образ {system_image} загружен и готов к использованию.")
 
     # Многопоточная работа с эмуляторами
     with ThreadPoolExecutor(max_workers=len(avd_names)) as executor:
         for avd_name in avd_names:
             executor.submit(
                 process_emulator,
-                avd_name,
-                emulator_auth_config_manager,
-                platform_version,
-                excel_processor,
-                system_image,
-                ram_size,
-                disk_size,
-                avd_ready_timeout,
-                base_port,
+                avd_name=avd_name,
+                base_port=base_port,
+                ram_size=ram_size,
+                disk_size=disk_size,
+                system_image=system_image,
+                excel_processor=excel_processor,
+                platform_version=platform_version,
+                avd_ready_timeout=avd_ready_timeout,
+                emulator_auth_config_manager=emulator_auth_config_manager,
             )
 
     print(f"[{thread_name}] Обработка завершена во всех эмуляторах.")
