@@ -1,5 +1,4 @@
 import threading
-from threading import Lock
 import time
 import logging
 
@@ -9,7 +8,6 @@ from selenium.webdriver.common.actions import interaction
 from selenium.webdriver.common.actions.action_builder import ActionBuilder
 from selenium.webdriver.common.actions.pointer_input import PointerInput
 from selenium.webdriver import ActionChains
-
 from MobileElementsHandler import MobileElementsHandler as Meh
 
 logging.basicConfig(
@@ -26,7 +24,6 @@ class TelegramMobileAppAutomation:
         self.avd_name = avd_name
         self.telegram_app_package = telegram_app_package
         self.actions = ActionChains(driver)
-        self.lock = Lock()
 
 
     def prepare_telegram_app(self):
@@ -87,7 +84,7 @@ class TelegramMobileAppAutomation:
             current_activity = self.driver.current_activity
             logging.info(f"[{thread_name}] [{self.avd_name}]: Проверяем, на главном ли экране: {current_activity}")
             # Замените это значение на соответствующее вашей версии Android
-            return "com.google.android" in current_activity
+            return current_activity == "com.android.launcher3.Launcher"
         except Exception as e:
             logging.error(f"[{thread_name}] [{self.avd_name}]: Ошибка при проверке главного экрана: {e}")
             return False
@@ -108,14 +105,13 @@ class TelegramMobileAppAutomation:
         raise TimeoutError(f"[{thread_name}] [{self.avd_name}]: Activity с '{activity_substring}' не загрузилось за {timeout} секунд.")
 
 
+
     def ensure_is_in_telegram_app(self):
         thread_name = threading.current_thread().name
 
         try:
             self.prepare_telegram_app()
             logging.info(f"[{thread_name}] [{self.avd_name}]: Убедились, что приложение Telegram открыто.")
-            self.navigate_to_saved_messages()
-            logging.info(f"[{thread_name}] [{self.avd_name}]: Успешно перешли в \"Избранное\".")
         except Exception as e:
             logging.error(f"[{thread_name}] [{self.avd_name}]: Ошибка при попытке открыть Telegram: {e}")
             raise
@@ -124,58 +120,29 @@ class TelegramMobileAppAutomation:
     def install_apk(self, app_package, apk_path):
         thread_name = threading.current_thread().name
 
-        with self.lock:
-            while not self.driver.is_app_installed(app_package):
-                try:
-                    logging.info(f"[{thread_name}] [{self.avd_name}] Приложение {app_package} еще не установлено, пробуем установить...")
-                    self.driver.install_app(apk_path)
-                except Exception as e:
-                    logging.error(f"[{thread_name}] [{self.avd_name}]: Ошибка при попытке установить приложение {apk_path}: {e}")
+        while not self.driver.is_app_installed(app_package):
+            logging.info(f"[{thread_name}] [{self.avd_name}] Приложение {app_package} еще не установлено, пробуем установить...")
+            self.driver.install_app(apk_path)
 
         logging.info(f"[{thread_name}] [{self.avd_name}] Приложение {app_package} успешно установлено.")
-
-
-    def navigate_to_saved_messages(self):
-        thread_name = threading.current_thread().name
-
-        try:
-            navigation_menu_locator_ru = "//android.widget.ImageView[@content-desc='Открыть меню навигации']"
-            navigation_menu_locator_en = "//android.widget.ImageView[@content-desc='Open navigation menu']"
-
-            navigation_menu_el = Meh.wait_for_element_xpath(
-                navigation_menu_locator_ru,
-                navigation_menu_locator_en,
-                driver=self.driver,
-                timeout=30
-            )
-
-            navigation_menu_el.click()
-
-            logging.info(f"[{thread_name}] [{self.avd_name}]: Кнопка меню навигации успешно нажата!")
-
-            saved_messages_locator_ru = "(//android.widget.TextView[@text='Избранное'])[1]"
-            saved_messages_locator_en = "(//android.widget.TextView[@text='Saved Messages'])[1]"
-            saved_messages_el = Meh.wait_for_element_xpath(
-                saved_messages_locator_ru,
-                saved_messages_locator_en,
-                driver=self.driver,
-                timeout=30
-            )
-
-            saved_messages_el.click()
-
-            logging.info(f"[{thread_name}] [{self.avd_name}]: Кнопка 'Избранное' успешно нажата!")
-        except Exception as ex:
-            self.ensure_is_in_telegram_app()
-            logging.info(f"[{thread_name}] [{self.avd_name}]: Произошла ошибка в процессе перехода в \"Избранное\": {ex}")
 
 
     def send_message_with_phone_number(self, phone_number):
         thread_name = threading.current_thread().name
 
-        try:
-            logging.info(f"[{thread_name}] [{self.avd_name}]: Пробуем проверить номер {phone_number}.")
+        # Запуск настроек для теста
+        self.driver.activate_app("com.android.settings")
 
+        ManualScriptControl.wait_for_user_input(f"[{thread_name}] [{self.avd_name}]: Загрузился в эмулятор и открыл настройки.\n")
+
+        self.ensure_is_in_telegram_app()
+
+        try:
+            navigation_menu_locator = "//android.widget.ImageView[@content-desc='Открыть меню навигации']"
+            navigation_menu_el = Meh.wait_for_element_xpath(
+                navigation_menu_locator, driver=self.driver, timeout=15)
+
+<<<<<<< HEAD
             message_field_empty_locator = "//android.widget.EditText[contains(@text, 'Message') or contains(@text, 'Сообщение')"
             message_field_el = Meh.wait_for_element_xpath(
                 message_field_empty_locator,
@@ -202,35 +169,59 @@ class TelegramMobileAppAutomation:
 
                 message_field_el.send_keys(phone_number)
                 time.sleep(2)
+=======
+            navigation_menu_el.click()
+
+            print(f"[{thread_name}] [{self.avd_name}]: Кнопка меню навигации успешно нажата!")
 
 
 
-            send_button_locator_ru = "//android.view.View[@content-desc='Отправить']"
-            send_button_locator_en = "//android.view.View[@content-desc='Send']"
+            saved_messages_locator = "(//android.widget.TextView[@text='Избранное'])[1]"
+            saved_messages_el = Meh.wait_for_element_xpath(
+                saved_messages_locator, driver=self.driver, timeout=15)
 
+
+            saved_messages_el.click()
+
+            print(f"[{self.avd_name}]: Кнопка 'Избранное' успешно нажата!")
+
+
+
+            print(f"[{self.avd_name}]: Пробуем проверить номер {phone_number}.")
+
+            message_field_locator = "//android.widget.EditText[@text='Сообщение']"
+            message_field_el = Meh.wait_for_element_xpath(
+                message_field_locator, driver=self.driver, timeout=15)
+
+            message_field_el.click()
+            time.sleep(0.5)
+
+            message_field_el.send_keys(phone_number)
+            time.sleep(0.5)
+>>>>>>> parent of fd6cc3e (перед обновлением обработчика)
+
+
+
+            send_button_locator = "//android.view.View[@content-desc='Отправить']"
             send_button_el = Meh.wait_for_element_xpath(
-                send_button_locator_ru,
-                send_button_locator_en,
-                driver=self.driver,
-                timeout=30
-            )
+                send_button_locator, driver=self.driver, timeout=15)
 
             send_button_el.click()
 
             current_number_message_locator = f"//android.view.ViewGroup[contains(@text, '{phone_number}')][last()]"
             current_number_message_el = Meh.wait_for_element_xpath(
-                current_number_message_locator, driver=self.driver, timeout=30)
+                current_number_message_locator, driver=self.driver, timeout=15)
 
             # Получение координат элемента
             rect = current_number_message_el.rect
-            logging.info(rect)
+            print(rect)
             center_x = rect['x'] + (rect['width'] // 2)
             center_y = rect['y'] + (rect['height'] // 2)
 
             shifted_x = int(center_x + center_x * 0.25)
             shifted_y = int(center_y + center_y * 0.05)
 
-            logging.info(f"[{thread_name}] [{self.avd_name}]: Клик по центру элемента: x={shifted_x}, y={shifted_y}") # Заменить shifted_y на center_y, если не заработает.
+            print(f"[{self.avd_name}]: Клик по центру элемента: x={shifted_x}, y={shifted_y}") # Заменить shifted_y на center_y, если не заработает.
 
 
 
@@ -241,34 +232,22 @@ class TelegramMobileAppAutomation:
             self.actions.w3c_actions.pointer_action.pointer_up()
             self.actions.perform()
 
-            show_profile_btn_locator_ru = "//android.widget.TextView[contains(@text, 'Перейти в профиль')]"
-            show_profile_btn_locator_en = "//android.widget.TextView[contains(@text, 'View Profile')]"
-            profile_doesnt_exist_locator_ru = "//android.widget.TextView[contains(@text, 'Номер не зарегистрирован в Telegram')]"
-            profile_doesnt_exist_locator_en = "//android.widget.TextView[contains(@text, 'This number is not on Telegram')]"
+            show_profile_btn_locator = "//android.widget.TextView[contains(@text, 'Перейти в профиль')]"
+            profile_doesnt_exist_locator = "//android.widget.TextView[contains(@text, 'Номер не зарегистрирован в Telegram')]"
 
 
             element = Meh.wait_for_element_xpath(
-                show_profile_btn_locator_ru,
-                show_profile_btn_locator_en,
-                profile_doesnt_exist_locator_ru,
-                profile_doesnt_exist_locator_en,
-                driver=self.driver,
-                timeout=30
-            )
+                profile_doesnt_exist_locator, show_profile_btn_locator, driver=self.driver, timeout=15)
 
 
-            if "Перейти в профиль" in element.get_attribute("text") or "View Profile" in element.get_attribute("text"):
-                logging.info(f"[{thread_name}] [{self.avd_name}]: Номер {phone_number} зарегистрирован в Telegram.")
-                return True
-            elif "Номер не зарегистрирован в Telegram" in element.get_attribute("text") or "This number is not on Telegram" in element.get_attribute("text"):
-                logging.info(f"[{thread_name}] [{self.avd_name}]: Номер {phone_number} не зарегистрирован в Telegram.")
-                return False
-
-
+            if "Перейти в профиль" in element.get_attribute("text"):
+                print(f"[{self.avd_name}]: Номер {phone_number} зарегистрирован в Telegram.")
+            elif "Номер не зарегистрирован в Telegram" in element.get_attribute("text"):
+                print(f"[{self.avd_name}]: Номер {phone_number} не зарегистрирован в Telegram.")
 
         except Exception as ex:
-            self.ensure_is_in_telegram_app()
-            logging.info(f"[{thread_name}] [{self.avd_name}]: Произошла ошибка в процессе проверки номера: {ex}")
+            self.driver.stop_driver()
+            print(f"[{self.avd_name}]: Произошла ошибка в процессе автоматизации: {ex}")
 
 
     def authorize_if_needed(self):
@@ -278,5 +257,5 @@ class TelegramMobileAppAutomation:
             if not self.emulator_auth_config_manager.is_authorized(self.avd_name):
                 ManualScriptControl.wait_for_user_input(f"[{thread_name}] [{self.avd_name}]: Авторизуйтесь в Telegram Web и нажмите Enter для продолжения.")
         except Exception as e:
-            logging.info(f"[{thread_name}] [{self.avd_name}]: Ошибка авторизации для эмулятора: {e}")
+            print(f"[{thread_name}] [{self.avd_name}]: Ошибка авторизации для эмулятора: {e}")
 

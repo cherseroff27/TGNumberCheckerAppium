@@ -1,12 +1,6 @@
 import os
 import re
 import pandas as pd
-import logging
-
-logging.basicConfig(
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
 
 
 class ExcelDataBuilder:
@@ -17,7 +11,11 @@ class ExcelDataBuilder:
         # Чтение исходного файла Excel
         self.df = pd.read_excel(self.input_path, header=0)  # Заголовки на первой строке
         self.df.columns = self.df.columns.str.strip()
+<<<<<<< HEAD
         print(f"Заголовки таблицы: {self.df.columns.tolist()}")
+=======
+        print(f"[DEBUG] Заголовки таблицы: {self.df.columns.tolist()}")
+>>>>>>> parent of fd6cc3e (перед обновлением обработчика)
 
         # Проверка наличия столбца
         if 'Телефон Ответчика' not in self.df.columns:
@@ -27,6 +25,10 @@ class ExcelDataBuilder:
         if not os.path.exists(self.output_path):
             self._create_empty_excel()
             print(f"Пустой файл Excel создан по пути: {self.output_path}")
+<<<<<<< HEAD
+=======
+
+>>>>>>> parent of fd6cc3e (перед обновлением обработчика)
 
     def _create_empty_excel(self):
         """Создает пустой Excel-файл с такой же структурой, как в self.df."""
@@ -41,6 +43,7 @@ class ExcelDataBuilder:
         empty_df = self.df.iloc[0:0]  # Пустой DataFrame с колонками из исходного файла
         empty_df.to_excel(self.output_path, index=False)
 
+<<<<<<< HEAD
     def get_next_row(self):
         """Получает следующую строку из таблицы и форматирует номер."""
         if not self.df.empty:
@@ -76,3 +79,22 @@ class ExcelDataBuilder:
         if len(digits) == 11 and digits.startswith('7'):
             return f'+{digits}'  # Форматируем номер в нужный вид
         return None  # Если формат не подходит, возвращаем None
+=======
+
+    def get_phone_numbers(self):
+        return self.df['Телефон Ответчика'].dropna().apply(lambda x: f"+{str(x).replace('-', '').replace(' ', '')}")
+
+
+    def export_registered_contacts(self, registered_numbers):
+        registered_rows = self.df[self.df['Телефон Ответчика'].isin(registered_numbers)]
+        registered_rows.to_excel(self.output_path, index=False)
+
+
+    @staticmethod
+    def format_phone_number(number):
+        # Оставляем только цифры и приводим к формату +7xxxxxxxxxx
+        digits = re.sub(r'\D', '', number)  # Убираем все нецифровые символы
+        if len(digits) == 11 and digits.startswith('7'):
+            return f'+{digits}'  # Форматируем номер в нужный вид
+        return None  # Если формат не подходит, возвращаем None
+>>>>>>> parent of fd6cc3e (перед обновлением обработчика)

@@ -4,13 +4,17 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 
+<<<<<<< HEAD
 from appium.webdriver.extensions.android.nativekey import AndroidKey
 
+=======
+>>>>>>> parent of fd6cc3e (перед обновлением обработчика)
 from ExcelDataBuilder import ExcelDataBuilder
 from TGMobileAppAutomation import TelegramMobileAppAutomation
 from EmulatorAuthConfigManager import EmulatorAuthConfigManager
 from AndroidDriverManager import AndroidDriverManager
 from EmulatorManager import EmulatorManager
+
 
 import logging
 
@@ -32,19 +36,37 @@ class ThreadSafeExcelProcessor:
     def get_next_number(self):
         """Получает следующую строку из таблицы для обработки."""
         with self.lock:
+<<<<<<< HEAD
             row = self.excel_data_builder.get_next_row()
             if row is None:
+=======
+            if not self.excel_data_builder.df.empty:
+                row = self.excel_data_builder.df.iloc[0]
+                logging.debug(f"Выдан номер для обработки: {row['Телефон Ответчика']}.")
+                self.excel_data_builder.df = self.excel_data_builder.df.iloc[1:]     # Удаляем строку из DataFrame
+                return row
+            else:
+                logging.info("DataFrame пуст, все номера обработаны.")
+>>>>>>> parent of fd6cc3e (перед обновлением обработчика)
                 self.is_numbers_ended = True
             return row
 
     def record_valid_number(self, row, avd_name):
         """Записывает подтвержденный номер в выходной Excel-файл."""
         thread_name = threading.current_thread().name
+<<<<<<< HEAD
 
         with self.lock:
             logging.info(f"Добавляем строку в экспорт: {row}")
             self.excel_data_builder.export_registered_row(row)
             logging.info(f"[{thread_name}] [{avd_name}] Номер {row['Телефон Ответчика']} добавлен в экспортную таблицу.")
+=======
+        with self.lock:
+            number = row['Телефон Ответчика']
+            self.excel_data_builder.export_registered_contacts([row['Телефон Ответчика']])
+            logging.info(f"[{thread_name}] [{avd_name}] Номер {number} добавлен в экспортную таблицу.")
+
+>>>>>>> parent of fd6cc3e (перед обновлением обработчика)
 
 def get_platform_version_from_system_image(system_image):
     if "android-28" in system_image:
@@ -53,7 +75,6 @@ def get_platform_version_from_system_image(system_image):
 
 
 def process_emulator(
-        apk_path: str,
         avd_name: str,
         base_port: int,
         ram_size: str,
@@ -67,7 +88,6 @@ def process_emulator(
     """Запускает эмулятор и проверяет номера на зарегистрированность."""
     try:
         thread_name = threading.current_thread().name
-
         logging.info(f"[{thread_name}] Начинаем процесс запуска эмулятора {avd_name}...")
 
         emulator_port = base_port + avd_names.index(avd_name) * 2  # Расчет портов для эмулятора и Appium
@@ -140,11 +160,14 @@ def process_emulator(
             emulator_auth_config_manager=emulator_auth_config_manager,
         )
 
+        apk_path = "telegram_apk/Telegram.apk"
+
         tg_mobile_app_automation.install_apk(
             app_package=tg_mobile_app_automation.telegram_app_package,
             apk_path=apk_path
         )
 
+        tg_mobile_app_automation.ensure_is_in_telegram_app()
 
         if not emulator_auth_config_manager.is_authorized(avd_name):
             logging.info(f"[{thread_name}] Авторизуйтесь в Telegram на эмуляторе {avd_name} и нажмите Enter для продолжения.")
@@ -159,8 +182,6 @@ def process_emulator(
             logging.info(f"[{thread_name}] Пометил {avd_name} как авторизованный!")
 
 
-        tg_mobile_app_automation.ensure_is_in_telegram_app()
-
 
         while not excel_processor.is_numbers_ended:
             row = excel_processor.get_next_number()
@@ -168,6 +189,7 @@ def process_emulator(
                 break
 
             phone_number = row['Телефон Ответчика']
+<<<<<<< HEAD
             if not phone_number:
                 logging.warning(f"[{thread_name}] [{avd_name}]: Пропуск некорректного номера: {phone_number}.")
                 continue
@@ -179,6 +201,15 @@ def process_emulator(
 
             logging.info(f"[{thread_name}] [{avd_name}]: Жмем кнопку 'Назад'")
             driver.press_keycode(AndroidKey.BACK)
+=======
+            logging.info(f"[{thread_name}] [{avd_name}]: Проверка номера: {phone_number}...")
+
+            if tg_mobile_app_automation.send_message_with_phone_number(phone_number):
+                excel_processor.record_valid_number(row, avd_name)
+                logging.info(f"[{thread_name}] [{avd_name}]: Номер {phone_number} зарегистрирован.")
+            else:
+                logging.info(f"[{thread_name}] [{avd_name}]: Номер {phone_number} не зарегистрирован.")
+>>>>>>> parent of fd6cc3e (перед обновлением обработчика)
 
     except Exception as ex:
         thread_name = threading.current_thread().name
@@ -198,7 +229,7 @@ if __name__ == "__main__":
     thread_name = threading.current_thread().name
 
     # Параметры
-    input_excel_path = os.path.join(DEFAULT_EXCEL_TABLE_DIR, "filled_table.xlsx")
+    input_excel_path = os.path.join(DEFAULT_EXCEL_TABLE_DIR, "random_excel_data.xlsx")
     output_excel_path = os.path.join(DEFAULT_EXCEL_TABLE_DIR, "exported_data.xlsx")
 
     telegram_app_package = "org.telegram.messenger"
@@ -207,7 +238,7 @@ if __name__ == "__main__":
 
     avd_names = ["AVD_DEVICE_1", "AVD_DEVICE_2"]
     # avd_names = ["AVD_DEVICE_1"]
-    ram_size = "4096"
+    ram_size = "2048"
     disk_size = "8192M"
     avd_ready_timeout = 600
     base_port = 5554
@@ -221,14 +252,11 @@ if __name__ == "__main__":
     emulator_manager._download_system_image(system_image)
     logging.info(f"[{thread_name}] Образ {system_image} загружен и готов к использованию.")
 
-    apk_path = os.path.join(os.getcwd(), "telegram_apk/Telegram.apk")
-
     # Многопоточная работа с эмуляторами
     with ThreadPoolExecutor(max_workers=len(avd_names)) as executor:
         for avd_name in avd_names:
             executor.submit(
                 process_emulator,
-                apk_path=apk_path,
                 avd_name=avd_name,
                 base_port=base_port,
                 ram_size=ram_size,
@@ -240,4 +268,4 @@ if __name__ == "__main__":
                 emulator_auth_config_manager=emulator_auth_config_manager,
             )
 
-    logging.info(f"[{thread_name}] Обработка завершена во всех эмуляторах.")
+    print(f"[{thread_name}] Обработка завершена во всех эмуляторах.")

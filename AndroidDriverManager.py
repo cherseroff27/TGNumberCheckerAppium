@@ -2,7 +2,6 @@ import os
 import requests
 from appium import webdriver
 from appium.options.android import UiAutomator2Options
-
 from EmulatorAuthConfigManager import EmulatorAuthConfigManager
 import time
 import socket
@@ -146,13 +145,8 @@ class AndroidDriverManager:
 
         options.platformName = "Android"
         options.automationName = "UiAutomator2"
-        options.ensure_webviews_have_pages = True
-        options.connectHardwareKeyboard = True
         options.ignoreUnimportantViews = True
         options.disableWindowAnimation = True
-        options.auto_grant_permissions = True
-        options.disableWindowAnimation = True
-        options.native_web_screenshot = True
         options.noReset = True
 
         return options
@@ -179,7 +173,7 @@ class AndroidDriverManager:
 
             return self.driver
         except Exception as e:
-            logging.info(f"[{thread_name}] Ошибка при создании драйвера: {e}")
+            print(f"[{thread_name}] Ошибка при создании драйвера: {e}")
 
 
     def is_device_connected_adb(self, emulator_port):
