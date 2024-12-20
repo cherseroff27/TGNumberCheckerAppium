@@ -57,7 +57,7 @@ class TelegramMobileAppAutomation:
             self.driver.activate_app(self.telegram_app_package)
 
             # Ожидание загрузки Telegram (appActivity содержит "org.telegram.messenger")
-            self.wait_for_activity_contains("org.telegram.messenger", timeout=15)
+            self.wait_for_activity_contains("org.telegram.messenger", timeout=30)
             logging.info(f"[{thread_name}] [{self.avd_name}]: Telegram успешно запущен.")
 
             # Закрываем Telegram
@@ -70,7 +70,7 @@ class TelegramMobileAppAutomation:
             self.driver.activate_app(self.telegram_app_package)
 
             # Ожидание появления главного экрана Telegram (appActivity с "DefaultIcon")
-            self.wait_for_activity_contains("org.telegram.messenger.DefaultIcon", timeout=15)
+            self.wait_for_activity_contains("org.telegram.messenger.DefaultIcon", timeout=30)
             logging.info(f"[{thread_name}] [{self.avd_name}]: Главный экран Telegram загружен.")
 
         except Exception as e:
@@ -93,7 +93,7 @@ class TelegramMobileAppAutomation:
             return False
 
 
-    def wait_for_activity_contains(self, activity_substring, timeout=15):
+    def wait_for_activity_contains(self, activity_substring, timeout=30):
         """
         Ожидает, пока текущее activity не будет содержать указанную подстроку.
         """
@@ -176,28 +176,32 @@ class TelegramMobileAppAutomation:
         try:
             logging.info(f"[{thread_name}] [{self.avd_name}]: Пробуем проверить номер {phone_number}.")
 
-            message_field_not_empty_locator = "//android.widget.EditText[string-length(@text) > 0]"
             message_field_empty_locator = "//android.widget.EditText[contains(@text, 'Message') or contains(@text, 'Сообщение')"
             message_field_el = Meh.wait_for_element_xpath(
-                message_field_not_empty_locator,
                 message_field_empty_locator,
                 driver=self.driver,
                 timeout=30
             )
 
-
             if not "Сообщение" in message_field_el.get_attribute("text") or not "Message" in message_field_el.get_attribute("text"):
-                hint = message_field_el.get_attribute("hint")
+                message_field_with_hint_locator = ("//android.widget.EditText[@text]")
+                message_field_el = Meh.wait_for_element_xpath(
+                    message_field_with_hint_locator,
+                    driver=self.driver,
+                    timeout=30
+                )
+
+                hint = message_field_el.get_attribute(")hint")
                 if hint and "Message" in hint:
                     message_field_el.clear()
-                    time.sleep(1)
+                    time.sleep(2)
 
             if "Сообщение" in message_field_el.get_attribute("text") or "Message" in message_field_el.get_attribute("text"):
                 message_field_el.click()
-                time.sleep(1)
+                time.sleep(2)
 
                 message_field_el.send_keys(phone_number)
-                time.sleep(1)
+                time.sleep(2)
 
 
 
@@ -227,6 +231,7 @@ class TelegramMobileAppAutomation:
             shifted_y = int(center_y + center_y * 0.05)
 
             logging.info(f"[{thread_name}] [{self.avd_name}]: Клик по центру элемента: x={shifted_x}, y={shifted_y}") # Заменить shifted_y на center_y, если не заработает.
+
 
 
             # Выполнение клика по центру элемента
