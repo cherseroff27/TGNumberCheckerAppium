@@ -33,6 +33,35 @@ class EmulatorAuthConfigManager:
             config[avd_name] = {"authorized": True}
             self._write_config(config)
 
+    def refresh_config(self):
+        """Обновляет данные конфигурации из файла."""
+        with self.lock:
+            self.config = self._read_config()
+
+    def reset_all_authorizations(self):
+        """
+        Сбрасывает все флаги 'authorized' на False во всей конфигурации.
+        """
+        with self.lock:
+            # Обновляем данные из файла
+            config = self._read_config()
+            for avd_name, avd_data in config.items():
+                if isinstance(avd_data, dict) and avd_data.get("authorized", False):
+                    avd_data["authorized"] = False
+            # Записываем изменения обратно в файл
+            self._write_config(config)
+
+    def reset_authorization(self, avd_name):
+        """
+        Сбрасываем статус авторизации эмулятора на False.
+        Если эмулятор отсутствует в конфигурации, ничего не делаем.
+        """
+        with self.lock:
+            config = self._read_config()
+            if avd_name in config:
+                config[avd_name]["authorized"] = False
+                self._write_config(config)
+
     def was_started(self, avd_name):
         """Проверяем, был ли ранее запущен эмулятор (прогрузился ли он до рабочего стола)."""
         with self.lock:

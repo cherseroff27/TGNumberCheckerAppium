@@ -1,5 +1,6 @@
 import os
 import subprocess
+import sys
 import threading
 import time
 import logging
@@ -109,7 +110,7 @@ class EmulatorManager:
         return installed_packages
 
 
-    def _download_system_image(self, system_image):
+    def download_system_image(self, system_image):
         """
         Скачивает указанный системный образ, если он отсутствует.
         """
@@ -130,7 +131,7 @@ class EmulatorManager:
                 logging.error(f"[{thread_name}] Не удалось загрузить системный образ {system_image}.")
 
 
-    def wait_for_emulator_ready(self, emulator_port, avd_ready_timeout=600, avd_name=None):
+    def wait_for_emulator_ready(self, avd_name, emulator_port, avd_ready_timeout=600):
         """
         Ожидает готовности эмулятора.
         """
@@ -141,13 +142,23 @@ class EmulatorManager:
         while time.time() - start_time < avd_ready_timeout:
             self._execute_command(f"adb -s emulator-{emulator_port} wait-for-device")
             boot_status = self._execute_command(f"adb -s emulator-{emulator_port} shell getprop sys.boot_completed")
+            elapsed_time = int(time.time() - start_time)  # Время, прошедшее с начала ожидания
             if boot_status == "1":
-                logging.info(f"[{thread_name}] Эмулятор готов к работе.")
+                logging.info(f"\n[{thread_name}] Эмулятор готов к работе.")
                 return True
             else:
-                logging.error(f"[{thread_name}] [{avd_name}] Эмулятор пока еще не готов к работе. Ожидаем...")
-            time.sleep(20)
-        logging.error(f"[{thread_name}] [{avd_name}] Эмулятор не стал готов к работе"
+                # Перезаписываем сообщение с добавлением времени ожидания
+                sys.stdout.write(
+                    f"\r[{thread_name}] [{avd_name}] Эмулятор пока еще не готов к работе. Ожидаем... "
+                    f"Прошло: {elapsed_time} секунд."
+                )
+                sys.stdout.flush()
+            time.sleep(1)
+
+        # Очистка последней строки и вывод ошибки
+        sys.stdout.write("\r")
+        sys.stdout.flush()
+        logging.error(f"[{thread_name}] [{avd_name}] Эмулятор не стал готов к работе "
                       f"за отведённое время: {avd_ready_timeout} секунд.")
         return False
 
@@ -193,7 +204,11 @@ class EmulatorManager:
                 return False
 
             # Запускаем эмулятор.
-            self.start_emulator_with_optional_snapshot(avd_name, emulator_port)
+            self.start_emulator_with_optional_snapshot(
+                avd_name=avd_name,
+                emulator_port=emulator_port,
+                avd_ready_timeout=avd_ready_timeout
+            )
 
             return True
 
@@ -202,7 +217,7 @@ class EmulatorManager:
             return False
 
 
-    def start_emulator_with_optional_snapshot(self, avd_name, emulator_port):
+    def start_emulator_with_optional_snapshot(self, avd_name, avd_ready_timeout, emulator_port):
         """
         Универсальный метод для запуска эмулятора с возможностью загрузки/создания снепшота.
         """
@@ -229,7 +244,11 @@ class EmulatorManager:
         process = subprocess.Popen(snapshot_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
         logging.info(f"[{thread_name}] Эмулятор {avd_name} запущен. Ожидание загрузки...")
 
-        if not self.wait_for_emulator_ready(emulator_port):
+        if not self.wait_for_emulator_ready(
+                avd_name=avd_name,
+                emulator_port=emulator_port,
+                avd_ready_timeout=avd_ready_timeout
+        ):
             logging.error(f"[{thread_name}] Эмулятор {avd_name} не стал готов к работе.")
             process.terminate()
             return False
@@ -265,7 +284,7 @@ class EmulatorManager:
 
 
     @staticmethod
-    def _update_avd_config(avd_name, ram_size="2048", disk_size="8192M"):
+    def _update_avd_config(avd_name, ram_size="1024", disk_size="2048M"):
         """
         Обновляет параметры AVD после его создания: RAM, Disk Size, GPU.
         """
@@ -320,7 +339,11 @@ class EmulatorManager:
             result = self._execute_command(delete_command)
             if result is not None:
                 logging.info(f"[{thread_name}] Эмулятор {avd_name} успешно удалён.")
-                self.delete_snapshot(avd_name, port, snapshot_name)
+                try:
+                    self.delete_snapshot(avd_name, port, snapshot_name)
+                except Exception as e:
+                    logging.error(f"[{thread_name}] Ошибка при удалении snapshot {avd_name}: {e}")
+                    return True
                 return True
             else:
                 logging.error(f"[{thread_name}] Не удалось удалить эмулятор {avd_name}.")

@@ -162,7 +162,7 @@ class TelegramCheckerApp:
                     os.path.isdir(os.path.join(self.ui.browser_profiles_dir.get(), f))]
 
         logging.info(f"Имена всех профилей: {profiles}")
-        source_xlsx = app.ui.excel_file_path.get()
+        source_xlsx = app.ui.source_excel_file_path.get()
         logging.info(f"Исходный файл таблицы: {source_xlsx}")
         xlsx_for_export = app.ui.export_table_path.get()
         logging.info(f"Экспортный файл таблицы: {xlsx_for_export}")
@@ -220,7 +220,7 @@ if __name__ == "__main__":
     app = TelegramCheckerApp()
     app.root.mainloop()
 
-    logging.info(f"Работал с таблицей {app.ui.excel_file_path.get()}.")
+    logging.info(f"Работал с таблицей {app.ui.source_excel_file_path.get()}.")
     logging.info(f"Экспортировал подтвержденные номера в таблицу {app.ui.export_table_path.get()}.")
     logging.info(f"Подтверждена регистрация {reg_numbers_counter} номеров из {reg_numbers_counter + unreg_numbers_counter}.")
     logging.info(f"Не подтверждена регистрация {unreg_numbers_counter} номеров из {reg_numbers_counter + unreg_numbers_counter}.")

@@ -1,23 +1,39 @@
 import glob
+import json
 import os
-from fileinput import filename
 
+from EmulatorAuthConfigManager import EmulatorAuthConfigManager
 import pandas as pd
+
+import logging
+
+logging.basicConfig(
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    level=logging.INFO
+)
 
 
 class TelegramCheckerUILogic:
-    def __init__(self, browser_profiles_dir: str, default_excel_dir: str, profile_manager):
-        self.browser_profiles_dir = browser_profiles_dir
-        self.profile_manager = profile_manager
+    def __init__(self, config_file, default_excel_dir: str, emulator_auth_config_manager: EmulatorAuthConfigManager):
+        self.config_file = config_file
         self.default_excel_dir = default_excel_dir
+        self.emulator_auth_config_manager = emulator_auth_config_manager
 
-    def get_profiles_dir(self):
-        """
-        Возвращает путь к папке с профилями браузеров. Если папка не существует, создаёт её.
-        """
-        if not os.path.exists(self.browser_profiles_dir):
-            os.makedirs(self.browser_profiles_dir)
-        return self.browser_profiles_dir
+        # Список имен AVD, который будет заполняться через интерфейс
+        self.avd_names = []
+
+    def load_config_file_content(self):
+        """Загружает содержимое конфигурационного файла для визуализации."""
+        if not os.path.exists(self.config_file):
+            logging.warning(f"Конфигурационный файл {self.config_file} не найден.")
+            return {}
+
+        try:
+            with open(self.config_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            logging.error(f"Ошибка при чтении конфигурационного файла: {e}")
+            return {}
 
     def get_latest_excel_file(self):
         """Возвращает путь к последнему изменённому Excel-файлу."""
@@ -62,21 +78,3 @@ class TelegramCheckerUILogic:
             max_width = max(len(value) for value in values)
             column_widths[col] = max_width
         return column_widths
-
-    def load_profiles_to_treeview(self, treeview):
-        """
-        Загружает список профилей из папки и отображает в Treeview.
-        """
-        # Очистим текущие данные в Treeview
-        treeview.delete(*treeview.get_children())
-
-        # Получаем список файлов/папок
-        profiles_path = self.browser_profiles_dir
-        if not os.path.exists(profiles_path):
-            return
-
-        profiles = os.listdir(profiles_path)
-
-        # Добавляем данные в Treeview
-        for profile in profiles:
-            treeview.insert("", "end", values=(profile,))

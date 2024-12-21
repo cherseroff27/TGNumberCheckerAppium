@@ -208,7 +208,6 @@ class AndroidDriverManager:
         command = f"adb.exe connect {self.local_ip}:{self.port}"
         self.execute_adb_command(command)
 
-
     def stop_driver(self):
         if self.driver:
             self.driver.quit()
@@ -225,3 +224,13 @@ class AndroidDriverManager:
             self.process.wait()
             logging.info(f"[{thread_name}] Appium сервер на порту {self.port} остановлен.")
             self.process = None
+
+    @staticmethod
+    def setup_connection_data(base_port, avd_names, avd_name):
+        thread_name = threading.current_thread().name
+
+        emulator_port = base_port + avd_names.index(avd_name) * 2  # Расчет портов для эмулятора и Appium
+        logging.info(f"[{thread_name}] [{avd_name}]: Назначаем порт {emulator_port} для эмулятора {avd_name}...")
+        appium_port = 4723 + avd_names.index(avd_name) * 2
+        logging.info(f"[{thread_name}] [{avd_name}]: Назначаем порт {appium_port} для Appium-сервера {avd_name}...")
+        return emulator_port, appium_port

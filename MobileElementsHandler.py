@@ -75,11 +75,11 @@ class MobileElementsHandler:
                 if element:
                     return element
             except StaleElementReferenceException:
-                print("Элемент обновился в DOM. Повторяем попытку...")
+                print(f"Элемент с локаторами {locators} обновился в DOM. Повторяем попытку...")
             except TimeoutException:
-                print("Элемент не найден в течение текущей попытки.")
+                print(f"Элемент с локаторами {locators} не найден в течение текущей попытки.")
             except Exception as e:
-                print(f"Произошла ошибка при поиске элемента: {e}")
+                print(f"Произошла ошибка при поиске элемента с локаторами {locators}: {e}")
             time.sleep(0.5)
         raise TimeoutException(f"Не удалось найти элементы с локаторами: {locators}")
 
