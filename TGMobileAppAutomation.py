@@ -26,6 +26,7 @@ class TelegramMobileAppAutomation:
         self.telegram_app_package = telegram_app_package
         self.actions = ActionChains(driver)
         self.lock = Lock()
+        self.was_entered_saved_messages_page = False
 
 
     def prepare_telegram_app(self):
@@ -77,6 +78,8 @@ class TelegramMobileAppAutomation:
                 logging.error(f"[{thread_name}] [{self.avd_name}]: Ошибка при подготовке приложения Telegram: {e}")
                 return False
 
+
+
     def is_on_home_screen(self):
         """
         Проверяет, находимся ли мы на главном экране рабочего стола.
@@ -108,21 +111,6 @@ class TelegramMobileAppAutomation:
         raise TimeoutError(f"[{thread_name}] [{self.avd_name}]: Activity с '{activity_substring}' не загрузилось за {timeout} секунд.")
 
 
-
-    def try_skip_initial_window(self, thread_name):
-        try:
-            skip_button_locator = "//android.widget.Button[@text='GOT IT']"
-            skip_button = Meh.wait_for_element_xpath(
-                skip_button_locator,
-                driver=self.driver,
-                timeout=10
-            )
-            skip_button.click()
-            logging.info(f"[{thread_name}] [{self.avd_name}]: Приветственное окно пропущено.")
-        except Exception as ex:
-            logging.info(f"[{thread_name}] [{self.avd_name}]: Приветственное окно не обнаружено или уже пропущено: ", ex)
-
-
     def install_apk(self, app_package, apk_path):
         thread_name = threading.current_thread().name
 
@@ -145,6 +133,8 @@ class TelegramMobileAppAutomation:
             if not self.navigate_to_saved_messages():
                 logging.info(f"[{thread_name}] [{self.avd_name}]: Успешно перешли в \"Избранное\".")
                 return False
+            else:
+                self.was_entered_saved_messages_page = True
             return True
         except Exception as e:
             logging.error(f"[{thread_name}] [{self.avd_name}]: Ошибка при попытке открыть Telegram: {e}")
@@ -174,8 +164,7 @@ class TelegramMobileAppAutomation:
             logging.info(f"[{thread_name}] [{self.avd_name}]: Убедились в том, что вы действительно авторизованы!")
             return True
 
-        return True
-
+        return False
 
 
     def navigate_to_saved_messages(self):
@@ -218,6 +207,32 @@ class TelegramMobileAppAutomation:
             return False
 
 
+    def monitor_update_window(self, driver, thread_name, avd_name):
+        """Функция для фонового отслеживания окна обновления."""
+        while not self.was_entered_saved_messages_page:
+            try:
+                remind_later_locator = "//android.widget.TextView[@text='Remind me later']"
+                remind_later_button = Meh.wait_for_element_xpath(
+                    remind_later_locator,
+                    driver=driver,
+                    timeout=4,
+                    interval=2,
+                    enable_logging=True
+                )
+
+                if remind_later_button:
+                    logging.info(f"[{thread_name}] [{avd_name}]: Окно обновления найдено. Пытаемся закрыть...")
+                    remind_later_button.click()
+                    logging.info(f"[{thread_name}] [{avd_name}]: Окно обновления успешно закрыто.")
+                    break
+                else:
+                    break
+
+            except Exception as ex:
+                logging.error(f"[{thread_name}] [{avd_name}]: Ошибка в процессе мониторинга окна обновления: {ex}")
+        time.sleep(15)  # Делает проверку раз в 15 секунд
+        logging.info(f"[{thread_name}] [{avd_name}]: Завершил поиск окна 'Remind me later'.")
+
     def send_message_with_phone_number(self, phone_number):
         thread_name = threading.current_thread().name
 
@@ -230,7 +245,8 @@ class TelegramMobileAppAutomation:
                 message_field_not_empty_locator,
                 message_field_empty_locator,
                 driver=self.driver,
-                timeout=30
+                timeout=30,
+                interval=3
             )
 
 
@@ -263,6 +279,7 @@ class TelegramMobileAppAutomation:
 
             current_number_message_locator_1 = f"//android.view.ViewGroup[contains(@text, '{phone_number}')][last()]"
             current_number_message_locator_2 = f"//android.view.View[contains(@content-desc, '{phone_number}')][last()]"
+
             current_number_message_el = Meh.wait_for_element_xpath(
                 current_number_message_locator_1,
                 current_number_message_locator_2,
@@ -294,26 +311,30 @@ class TelegramMobileAppAutomation:
             show_profile_btn_locator_en = "//android.widget.TextView[contains(@text, 'View Profile')]"
             profile_doesnt_exist_locator_ru = "//android.widget.TextView[contains(@text, 'Номер не зарегистрирован в Telegram')]"
             profile_doesnt_exist_locator_en = "//android.widget.TextView[contains(@text, 'This number is not on Telegram')]"
-
+            delete_button_locator_ru ="//android.widget.TextView[@text='Delete']"
+            delete_button_locator_en = "//android.widget.TextView[@text='Удалить']"
 
             element = Meh.wait_for_element_xpath(
                 show_profile_btn_locator_ru,
                 show_profile_btn_locator_en,
                 profile_doesnt_exist_locator_ru,
                 profile_doesnt_exist_locator_en,
+                delete_button_locator_ru,
+                delete_button_locator_en,
                 driver=self.driver,
                 timeout=30
             )
 
 
             if "Перейти в профиль" in element.get_attribute("text") or "View Profile" in element.get_attribute("text"):
-                logging.info(f"[{thread_name}] [{self.avd_name}]: Номер {phone_number} зарегистрирован в Telegram.")
+                logging.info(f"[{thread_name}] [{self.avd_name}]: Номер {phone_number} зарегистрирован в Telegram!")
                 return True
             elif "Номер не зарегистрирован в Telegram" in element.get_attribute("text") or "This number is not on Telegram" in element.get_attribute("text"):
                 logging.info(f"[{thread_name}] [{self.avd_name}]: Номер {phone_number} не зарегистрирован в Telegram.")
                 return False
-
-
+            elif "Удалить" in element.get_attribute("text") or "Delete" in element.get_attribute("text"):
+                logging.info(f"[{thread_name}] [{self.avd_name}]: Номер {phone_number} не удалось проверить...")
+                return False
 
         except Exception as ex:
             self.ensure_is_in_telegram_app()

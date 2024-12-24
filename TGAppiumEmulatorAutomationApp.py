@@ -6,6 +6,7 @@ from functools import partial
 import atexit
 
 import threading
+from threading import Thread
 
 import tkinter as tk
 
@@ -14,6 +15,7 @@ from threading import Lock
 
 import pandas as pd
 from appium.webdriver.extensions.android.nativekey import AndroidKey
+from selenium.webdriver.ie.webdriver import WebDriver
 
 from ExcelDataBuilder import ExcelDataBuilder
 from TGMobileAppAutomation import TelegramMobileAppAutomation
@@ -24,7 +26,10 @@ from EmulatorManager import EmulatorManager
 from TelegramCheckerUI import TelegramCheckerUI
 from TelegramCheckerUILogic import TelegramCheckerUILogic
 
+from MobileElementsHandler import MobileElementsHandler as Meh
+
 import logging
+
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -81,11 +86,11 @@ class ThreadSafeExcelProcessor:
         logging.info(f"Фильтрация завершена. Осталось для обработки: {filtered_count} из {initial_count}.")
 
 
-    def get_next_number(self):
+    def get_next_number(self, thread_name, avd_name):
         with self.lock:
             if not self.excel_data_builder.df.empty:
                 row = self.excel_data_builder.df.iloc[0]
-                logging.info(f"Выдан номер для обработки: {row['Телефон Ответчика']}.")
+                logging.info(f"[{thread_name}] [{avd_name}]: Выдан номер для обработки: {row['Телефон Ответчика']}.")
                 self.excel_data_builder.df = self.excel_data_builder.df.iloc[1:]
                 return row
             else:
@@ -233,12 +238,6 @@ class TGAppiumEmulatorAutomationApp:
                         emulator_auth_config_manager.clear_emulator_data(avd_name)
                     raise RuntimeError(f"Не удалось запустить/создать эмулятор {avd_name}.")
                 else:
-                    emulator_auth_config_manager.mark_as_started(avd_name)
-                    emulator_manager.save_snapshot(
-                        avd_name=avd_name,
-                        emulator_port=emulator_port,
-                        snapshot_name="configured"
-                    )
                     logging.info(f"[{thread_name}] Эмулятор {avd_name} успешно подготовлен к работе!")
 
 
@@ -267,6 +266,21 @@ class TGAppiumEmulatorAutomationApp:
                 platform_version=platform_version
             )
 
+
+
+            while not emulator_auth_config_manager.was_started(avd_name):
+                logging.info(f"[{thread_name}] [{avd_name}] Запуск  отслеживания приветственного окна Android.")
+                self.monitor_initial_window_and_mark_as_started(
+                    driver=driver,
+                    thread_name=thread_name,
+                    avd_name=avd_name,
+                    emulator_auth_config_manager=emulator_auth_config_manager,
+                    emulator_manager=emulator_manager,
+                    emulator_port=emulator_port
+                )
+
+
+
             tg_mobile_app_automation = TelegramMobileAppAutomation(
                 driver=driver,
                 avd_name=avd_name,
@@ -275,17 +289,27 @@ class TGAppiumEmulatorAutomationApp:
                 emulator_auth_config_manager=emulator_auth_config_manager,
             )
 
-            if not emulator_auth_config_manager.is_authorized(avd_name) or not emulator_auth_config_manager.was_started(avd_name):
-                tg_mobile_app_automation.try_skip_initial_window(thread_name)
+
 
             tg_mobile_app_automation.install_apk(
                 app_package=tg_mobile_app_automation.telegram_app_package,
                 apk_path=apk_path
             )
 
+
+
+            update_monitor_thread = Thread(
+                target=tg_mobile_app_automation.monitor_update_window,
+                args=(driver, thread_name, avd_name),
+                daemon=True
+            )
+            logging.info(f"[{thread_name}] [{avd_name}] Запуск фонового потока, отслеживающего появление окна обновления Telegram.")
+            update_monitor_thread.start()
+
+
+
             while not emulator_auth_config_manager.is_authorized(avd_name):
-                logging.info(f"[{thread_name}] Авторизуйтесь в Telegram на эмуляторе {avd_name} и нажмите Enter для продолжения.")
-                input(f"[{thread_name}] Нажмите Enter после завершения авторизации в эмуляторе {avd_name}...\n")
+                input(logging.info(f"[{thread_name}] Авторизуйтесь в Telegram на эмуляторе {avd_name} и нажмите Enter для продолжения..."))
                 emulator_manager.save_snapshot(
                     avd_name,
                     emulator_port,
@@ -306,8 +330,11 @@ class TGAppiumEmulatorAutomationApp:
                 if not tg_mobile_app_automation.ensure_is_in_telegram_app():
                     emulator_auth_config_manager.reset_authorization(avd_name)
 
+
+            update_monitor_thread.join()
+
             while not excel_processor.is_numbers_ended:
-                row = excel_processor.get_next_number()
+                row = excel_processor.get_next_number(thread_name=thread_name, avd_name=avd_name)
                 if row is None:
                     break
 
@@ -328,6 +355,47 @@ class TGAppiumEmulatorAutomationApp:
         except Exception as ex:
             thread_name = threading.current_thread().name
             logging.error(f"[{thread_name}] [{avd_name}]: Произошла ошибка с эмулятором {avd_name}: {ex}")
+
+
+    @staticmethod
+    def monitor_initial_window_and_mark_as_started(
+            driver: WebDriver,
+            thread_name: str,
+            avd_name: str,
+            emulator_auth_config_manager: EmulatorAuthConfigManager,
+            emulator_manager: EmulatorManager,
+            emulator_port: int,
+    ):
+        while True:
+            try:
+                logging.info(f"[{thread_name}] [{avd_name}]: Мониторим наличие приветственного системного окна.")
+                skip_button_locator = "//android.widget.Button[@text='GOT IT']"
+                skip_button_element = Meh.wait_for_element_xpath(
+                    skip_button_locator,
+                    driver=driver,
+                    timeout=4,
+                    interval=2,
+                    enable_logging=False
+                )
+                if skip_button_element:
+                    logging.info(f"[{thread_name}] [{avd_name}]: Приветственное системное окно найдено. Пытаемся закрыть...")
+                    skip_button_element.click()
+                    logging.info(f"[{thread_name}] [{avd_name}]: Приветственное системное окно пропущено.")
+                    emulator_auth_config_manager.mark_as_started(avd_name)
+                    logging.info(f"[{thread_name}]: Пометил эмулятор [{avd_name}] в конфиге как запущенный.")
+
+                    time.sleep(1)
+
+                    emulator_manager.save_snapshot(
+                        avd_name=avd_name,
+                        emulator_port=emulator_port,
+                        snapshot_name="configured"
+                    )
+
+                    break
+            except Exception as ex:
+                logging.info(f"[{thread_name}] [{avd_name}]: Приветственное системное окно не обнаружено или уже пропущено: ", ex)
+            time.sleep(5)  # Делает проверку раз в 5 секунд
 
 
     @staticmethod

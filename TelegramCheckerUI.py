@@ -47,7 +47,7 @@ class TelegramCheckerUI:
         ttk.Button(self.root, text="Удалить конфигурацию", command=self.delete_config).pack(pady=5)
 
         # Кнопка для сброса флага авторизации у всех эмуляторов в конфиге
-        ttk.Button(self.root, text="Сбросить флаг авторизации у всех эмуляторов в конфиге", command=self.reset_all_authorizations()).pack(pady=5)
+        ttk.Button(self.root, text="Сбросить флаг авторизации у всех эмуляторов в конфиге", command=self.reset_all_authorizations).pack(pady=5)
 
         # Файл Excel
         ttk.Label(self.root, text="Файл таблицы Excel:", font=("Arial", 12)).pack(pady=5)
@@ -95,7 +95,8 @@ class TelegramCheckerUI:
         if not os.path.exists(self.logic.config_file):
             messagebox.showinfo("Информация", "Конфигурационный файл не найден.")
             return
-        self.logic.emulator_auth_config_manager.reset_all_authorizations()
+        if messagebox.askyesno("Подтверждение", "Вы действительно хотите сбросить авторизацию для всех эмуляторов?"):
+            self.logic.emulator_auth_config_manager.reset_all_authorizations()
 
 
     def delete_config(self):

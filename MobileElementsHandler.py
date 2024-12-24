@@ -33,6 +33,7 @@ class MobileElementsHandler:
             driver: WebDriver,
             timeout: int = 30,
             interval: int = 1,
+            enable_logging: bool = True
     ) -> Optional[WebElement]:
         """
         Ожидает появления элемента по XPath.
@@ -40,20 +41,31 @@ class MobileElementsHandler:
         :param driver: WebDriver Appium.
         :param timeout: Таймаут ожидания.
         :param interval: Интервал между попытками.
+        :param enable_logging: Параметр, отвечающий за включение/отключение логирования
         :return: Найденный элемент или None.
         """
         locator_tuples = [(By.XPATH, locator) for locator in locators]
         try:
             return MobileElementsHandler.wait_for_element_tuple(
-                *locator_tuples, driver=driver, timeout=timeout, interval=interval
+                *locator_tuples,
+                driver=driver,
+                timeout=timeout,
+                interval=interval,
+                enable_logging=enable_logging
             )
         except TimeoutException as e:
-            print(f"Элемент с локаторами {locator_tuples} не найден за {timeout} секунд. Ошибка: {e}")
+            if enable_logging:
+                print(f"Элемент с локаторами {locator_tuples} не найден за {timeout} секунд. Ошибка: {e}")
             return None
+
 
     @staticmethod
     def wait_for_element_tuple(
-            *locators: Tuple[str, str], driver: WebDriver, timeout: int = 30, interval: int = 1
+            *locators: Tuple[str, str],
+            driver: WebDriver,
+            timeout: int = 30,
+            interval: int = 1,
+            enable_logging: bool = True
     ) -> Optional[WebElement]:
         """
         Ожидает появления элемента по нескольким локаторам.
@@ -61,6 +73,7 @@ class MobileElementsHandler:
         :param driver: WebDriver Appium.
         :param timeout: Таймаут ожидания.
         :param interval: Интервал между попытками.
+        :param enable_logging: Параметр, отвечающий за включение/отключение логирования
         :return: Найденный элемент или None.
         """
         end_time = time.time() + timeout
@@ -75,13 +88,16 @@ class MobileElementsHandler:
                 if element:
                     return element
             except StaleElementReferenceException:
-                print(f"Элемент с локаторами {locators} обновился в DOM. Повторяем попытку...")
+                if enable_logging:
+                    print(f"Элемент с локаторами {locators} обновился в DOM. Повторяем попытку...")
             except TimeoutException:
-                print(f"Элемент с локаторами {locators} не найден в течение текущей попытки.")
+                if enable_logging:
+                    print(f"Элемент с локаторами {locators} не найден в течение текущей попытки.")
             except Exception as e:
-                print(f"Произошла ошибка при поиске элемента с локаторами {locators}: {e}")
-            time.sleep(0.5)
-        raise TimeoutException(f"Не удалось найти элементы с локаторами: {locators}")
+                if enable_logging:
+                    print(f"Произошла ошибка при поиске элемента с локаторами {locators}: {e}")
+        return None
+
 
     @staticmethod
     def ensure_element_is_interactable(driver: WebDriver, locator: Tuple[str, str], timeout: int = 10) -> bool:

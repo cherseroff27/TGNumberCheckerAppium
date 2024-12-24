@@ -98,7 +98,7 @@ class AndroidDriverManager:
                 logging.error(f"[{thread_name}] Порт {self.port} не удалось освободить. Проверьте вручную.")
                 return
 
-        logging.error(f"[{thread_name}] Порт {self.port} свободен!")
+        logging.info(f"[{thread_name}] Порт {self.port} свободен!")
 
 
     def start_appium_server(self):
@@ -113,7 +113,7 @@ class AndroidDriverManager:
             log_filename = f"appium_server_{self.port}.log"  # Уникальное имя файла логов для каждого порта
             log_file = open(log_filename, "w")  # Открыть файл для записи логов
 
-            command = f"appium --port {self.port} --log-level info"
+            command = f"appium --port {self.port} --log-level info --relaxed-security --session-override"
             try:
                 self.process = subprocess.Popen(
                     command,
@@ -146,6 +146,8 @@ class AndroidDriverManager:
 
         options.platformName = "Android"
         options.automationName = "UiAutomator2"
+        options.adb_exec_timeout = 60000
+        options.uiautomator2_server_install_timeout = 60000
         options.ensure_webviews_have_pages = True
         options.connectHardwareKeyboard = True
         options.ignoreUnimportantViews = True

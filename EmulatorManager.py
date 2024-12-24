@@ -5,7 +5,6 @@ import threading
 import time
 import logging
 
-
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     level=logging.INFO
@@ -144,7 +143,7 @@ class EmulatorManager:
             boot_status = self._execute_command(f"adb -s emulator-{emulator_port} shell getprop sys.boot_completed")
             elapsed_time = int(time.time() - start_time)  # Время, прошедшее с начала ожидания
             if boot_status == "1":
-                logging.info(f"\n[{thread_name}] Эмулятор готов к работе.")
+                logging.info(f"[{thread_name}] Эмулятор готов к работе.")
                 return True
             else:
                 # Перезаписываем сообщение с добавлением времени ожидания
