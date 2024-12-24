@@ -1,21 +1,21 @@
+import subprocess
 import threading
 from threading import Lock
 import time
-import logging
 
 from appium.webdriver.extensions.android.nativekey import AndroidKey
-from manual_script_control import ManualScriptControl
 from selenium.webdriver.common.actions import interaction
 from selenium.webdriver.common.actions.action_builder import ActionBuilder
 from selenium.webdriver.common.actions.pointer_input import PointerInput
 from selenium.webdriver import ActionChains
 
+from TelegramApkVersionManager import TelegramApkVersionManager
+
 from MobileElementsHandler import MobileElementsHandler as Meh
 
-logging.basicConfig(
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
+from logger_config import Logger
+logger = Logger.get_logger(__name__)
+
 
 class TelegramMobileAppAutomation:
     def __init__(self, driver, avd_name, emulator_auth_config_manager, excel_processor, telegram_app_package):
@@ -35,47 +35,47 @@ class TelegramMobileAppAutomation:
             try:
                 # Проверка текущего состояния и возвращение на главный экран
                 current_activity = self.driver.current_activity
-                logging.info(f"[{thread_name}] [{self.avd_name}]: Текущее Activity: {current_activity}")
+                logger.info(f"[{thread_name}] [{self.avd_name}]: Текущее Activity: {current_activity}")
 
                 if "org.telegram.messenger" not in current_activity:
-                    logging.info(f"[{thread_name}] [{self.avd_name}]: Мы не в Telegram. Проверяем, где мы находимся.")
+                    logger.info(f"[{thread_name}] [{self.avd_name}]: Мы не в Telegram. Проверяем, где мы находимся.")
 
                     # Завершаем текущее приложение
-                    logging.info(f"[{thread_name}] [{self.avd_name}]: Завершаем текущее приложение.")
+                    logger.info(f"[{thread_name}] [{self.avd_name}]: Завершаем текущее приложение.")
                     self.driver.press_keycode(AndroidKey.HOME)
-                    time.sleep(2)
+                    time.sleep(3)
 
                     # Проверяем главный экран
                     is_home_screen = self.is_on_home_screen()
                     if not is_home_screen:
-                        logging.info(f"[{thread_name}] [{self.avd_name}]: Возвращаемся на главный экран рабочего стола.")
+                        logger.info(f"[{thread_name}] [{self.avd_name}]: Возвращаемся на главный экран рабочего стола.")
                         self.driver.press_keycode(AndroidKey.HOME)
-                        time.sleep(2)
+                        time.sleep(3)
 
                 # Открытие приложения Telegram
-                logging.info(f"[{thread_name}] [{self.avd_name}]: Открываем приложение Telegram.")
+                logger.info(f"[{thread_name}] [{self.avd_name}]: Открываем приложение Telegram.")
                 self.driver.activate_app(self.telegram_app_package)
 
                 # Ожидание загрузки Telegram (appActivity содержит "org.telegram.messenger")
                 self.wait_for_activity_contains("org.telegram.messenger", timeout=15)
-                logging.info(f"[{thread_name}] [{self.avd_name}]: Telegram успешно запущен.")
+                logger.info(f"[{thread_name}] [{self.avd_name}]: Telegram успешно запущен.")
 
                 # Закрываем Telegram
-                logging.info(f"[{thread_name}] [{self.avd_name}]: Закрываем приложение Telegram.")
+                logger.info(f"[{thread_name}] [{self.avd_name}]: Закрываем приложение Telegram.")
                 self.driver.terminate_app(self.telegram_app_package)
                 time.sleep(2)
 
                 # Повторное открытие Telegram
-                logging.info(f"[{thread_name}] [{self.avd_name}]: Повторное открытие приложения Telegram.")
+                logger.info(f"[{thread_name}] [{self.avd_name}]: Повторное открытие приложения Telegram.")
                 self.driver.activate_app(self.telegram_app_package)
 
                 # Ожидание появления главного экрана Telegram (appActivity с "DefaultIcon")
                 self.wait_for_activity_contains("org.telegram.messenger.DefaultIcon", timeout=15)
-                logging.info(f"[{thread_name}] [{self.avd_name}]: Главный экран Telegram загружен.")
+                logger.info(f"[{thread_name}] [{self.avd_name}]: Главный экран Telegram загружен.")
 
                 return True
             except Exception as e:
-                logging.error(f"[{thread_name}] [{self.avd_name}]: Ошибка при подготовке приложения Telegram: {e}")
+                logger.error(f"[{thread_name}] [{self.avd_name}]: Ошибка при подготовке приложения Telegram: {e}")
                 return False
 
 
@@ -88,11 +88,11 @@ class TelegramMobileAppAutomation:
 
         try:
             current_activity = self.driver.current_activity
-            logging.info(f"[{thread_name}] [{self.avd_name}]: Проверяем, на главном ли экране: {current_activity}")
+            logger.info(f"[{thread_name}] [{self.avd_name}]: Проверяем, на главном ли экране: {current_activity}")
             # Замените это значение на соответствующее вашей версии Android
             return "com.google.android" in current_activity
         except Exception as e:
-            logging.error(f"[{thread_name}] [{self.avd_name}]: Ошибка при проверке главного экрана: {e}")
+            logger.error(f"[{thread_name}] [{self.avd_name}]: Ошибка при проверке главного экрана: {e}")
             return False
 
 
@@ -111,33 +111,19 @@ class TelegramMobileAppAutomation:
         raise TimeoutError(f"[{thread_name}] [{self.avd_name}]: Activity с '{activity_substring}' не загрузилось за {timeout} секунд.")
 
 
-    def install_apk(self, app_package, apk_path):
-        thread_name = threading.current_thread().name
-
-        with self.lock:
-            while not self.driver.is_app_installed(app_package):
-                try:
-                    logging.info(f"[{thread_name}] [{self.avd_name}] Приложение {app_package} еще не установлено, пробуем установить...")
-                    self.driver.install_app(apk_path)
-                except Exception as e:
-                    logging.error(f"[{thread_name}] [{self.avd_name}]: Ошибка при попытке установить приложение {apk_path}: {e}")
-
-        logging.info(f"[{thread_name}] [{self.avd_name}] Приложение {app_package} успешно установлено.")
-
-
     def ensure_is_in_telegram_app(self):
         thread_name = threading.current_thread().name
 
         try:
-            logging.info(f"[{thread_name}] [{self.avd_name}]: Убедились, что приложение Telegram открыто.")
+            logger.info(f"[{thread_name}] [{self.avd_name}]: Убедились, что приложение Telegram открыто.")
             if not self.navigate_to_saved_messages():
-                logging.info(f"[{thread_name}] [{self.avd_name}]: Успешно перешли в \"Избранное\".")
+                logger.info(f"[{thread_name}] [{self.avd_name}]: Успешно перешли в \"Избранное\".")
                 return False
             else:
                 self.was_entered_saved_messages_page = True
             return True
         except Exception as e:
-            logging.error(f"[{thread_name}] [{self.avd_name}]: Ошибка при попытке открыть Telegram: {e}")
+            logger.error(f"[{thread_name}] [{self.avd_name}]: Ошибка при попытке открыть Telegram: {e}")
             raise
 
 
@@ -158,10 +144,10 @@ class TelegramMobileAppAutomation:
         text_attribute = found_element.get_attribute("text")
         content_desc_attribute = found_element.get_attribute("content-desc")
         if text_attribute and "Start Messaging" in text_attribute or "Начать общение" in text_attribute:
-            logging.error(f"[{thread_name}] [{self.avd_name}]: Вы так и не авторизовались в Telegram вручную!")
+            logger.error(f"[{thread_name}] [{self.avd_name}]: Вы так и не авторизовались в Telegram вручную!")
             return False
         elif content_desc_attribute and "Open navigation menu" in content_desc_attribute or "Открыть меню навигации" in content_desc_attribute:
-            logging.info(f"[{thread_name}] [{self.avd_name}]: Убедились в том, что вы действительно авторизованы!")
+            logger.info(f"[{thread_name}] [{self.avd_name}]: Убедились в том, что вы действительно авторизованы!")
             return True
 
         return False
@@ -186,7 +172,7 @@ class TelegramMobileAppAutomation:
 
             navigation_menu_el.click()
 
-            logging.info(f"[{thread_name}] [{self.avd_name}]: Кнопка меню навигации успешно нажата!")
+            logger.info(f"[{thread_name}] [{self.avd_name}]: Кнопка меню навигации успешно нажата!")
 
             saved_messages_locator_ru = "(//android.widget.TextView[@text='Избранное'])[1]"
             saved_messages_locator_en = "(//android.widget.TextView[@text='Saved Messages'])[1]"
@@ -199,45 +185,19 @@ class TelegramMobileAppAutomation:
 
             saved_messages_el.click()
 
-            logging.info(f"[{thread_name}] [{self.avd_name}]: Кнопка 'Избранное' успешно нажата!")
+            logger.info(f"[{thread_name}] [{self.avd_name}]: Кнопка 'Избранное' успешно нажата!")
             return True
         except Exception as ex:
             self.ensure_is_in_telegram_app()
-            logging.info(f"[{thread_name}] [{self.avd_name}]: Произошла ошибка в процессе перехода в \"Избранное\": {ex}")
+            logger.warning(f"[{thread_name}] [{self.avd_name}]: Произошла ошибка в процессе перехода в \"Избранное\": {ex}")
             return False
 
-
-    def monitor_update_window(self, driver, thread_name, avd_name):
-        """Функция для фонового отслеживания окна обновления."""
-        while not self.was_entered_saved_messages_page:
-            try:
-                remind_later_locator = "//android.widget.TextView[@text='Remind me later']"
-                remind_later_button = Meh.wait_for_element_xpath(
-                    remind_later_locator,
-                    driver=driver,
-                    timeout=4,
-                    interval=2,
-                    enable_logging=True
-                )
-
-                if remind_later_button:
-                    logging.info(f"[{thread_name}] [{avd_name}]: Окно обновления найдено. Пытаемся закрыть...")
-                    remind_later_button.click()
-                    logging.info(f"[{thread_name}] [{avd_name}]: Окно обновления успешно закрыто.")
-                    break
-                else:
-                    break
-
-            except Exception as ex:
-                logging.error(f"[{thread_name}] [{avd_name}]: Ошибка в процессе мониторинга окна обновления: {ex}")
-        time.sleep(15)  # Делает проверку раз в 15 секунд
-        logging.info(f"[{thread_name}] [{avd_name}]: Завершил поиск окна 'Remind me later'.")
 
     def send_message_with_phone_number(self, phone_number):
         thread_name = threading.current_thread().name
 
         try:
-            logging.info(f"[{thread_name}] [{self.avd_name}]: Пробуем проверить номер {phone_number}.")
+            logger.info(f"[{thread_name}] [{self.avd_name}]: Пробуем проверить номер {phone_number}.")
 
             message_field_not_empty_locator = "//android.widget.EditText[string-length(@text) > 0]"
             message_field_empty_locator = "//android.widget.EditText[contains(@text, 'Message') or contains(@text, 'Сообщение')"
@@ -258,10 +218,10 @@ class TelegramMobileAppAutomation:
 
             if "Сообщение" in message_field_el.get_attribute("text") or "Message" in message_field_el.get_attribute("text"):
                 message_field_el.click()
-                time.sleep(1)
+                time.sleep(2)
 
                 message_field_el.send_keys(phone_number)
-                time.sleep(1)
+                time.sleep(2)
 
 
 
@@ -290,14 +250,14 @@ class TelegramMobileAppAutomation:
 
             # Получение координат элемента
             rect = current_number_message_el.rect
-            # logging.info(rect)
+            # logger.info(rect)
             center_x = rect['x'] + (rect['width'] // 2)
             center_y = rect['y'] + (rect['height'] // 2)
 
             shifted_x = int(center_x + center_x * 0.25)
             shifted_y = int(center_y + center_y * 0.05)
 
-            logging.info(f"[{thread_name}] [{self.avd_name}]: Клик по центру элемента: x={shifted_x}, y={shifted_y}") # Заменить shifted_y на center_y, если не заработает.
+            logger.info(f"[{thread_name}] [{self.avd_name}]: Клик по центру элемента: x={shifted_x}, y={shifted_y}") # Заменить shifted_y на center_y, если не заработает.
 
 
             # Выполнение клика по центру элемента
@@ -327,26 +287,65 @@ class TelegramMobileAppAutomation:
 
 
             if "Перейти в профиль" in element.get_attribute("text") or "View Profile" in element.get_attribute("text"):
-                logging.info(f"[{thread_name}] [{self.avd_name}]: Номер {phone_number} зарегистрирован в Telegram!")
+                logger.info(f"[{thread_name}] [{self.avd_name}]: Номер {phone_number} зарегистрирован в Telegram!")
                 return True
             elif "Номер не зарегистрирован в Telegram" in element.get_attribute("text") or "This number is not on Telegram" in element.get_attribute("text"):
-                logging.info(f"[{thread_name}] [{self.avd_name}]: Номер {phone_number} не зарегистрирован в Telegram.")
+                logger.info(f"[{thread_name}] [{self.avd_name}]: Номер {phone_number} не зарегистрирован в Telegram.")
                 return False
             elif "Удалить" in element.get_attribute("text") or "Delete" in element.get_attribute("text"):
-                logging.info(f"[{thread_name}] [{self.avd_name}]: Номер {phone_number} не удалось проверить...")
+                logger.info(f"[{thread_name}] [{self.avd_name}]: Номер {phone_number} не удалось проверить...")
                 return False
 
         except Exception as ex:
             self.ensure_is_in_telegram_app()
-            logging.info(f"[{thread_name}] [{self.avd_name}]: Произошла ошибка в процессе проверки номера: {ex}")
+            logger.info(f"[{thread_name}] [{self.avd_name}]: Произошла ошибка в процессе проверки номера: {ex}")
 
 
-    def authorize_if_needed(self):
+    def install_or_update_telegram_apk(self, apk_version_manager: TelegramApkVersionManager, apk_path, emulator_port):
+        """
+        Устанавливает или обновляет Telegram APK на эмуляторе.
+        Если версия установленного приложения устарела, выполняется обновление.
+        """
         thread_name = threading.current_thread().name
 
-        try:
-            if not self.emulator_auth_config_manager.is_authorized(self.avd_name):
-                ManualScriptControl.wait_for_user_input(f"[{thread_name}] [{self.avd_name}]: Авторизуйтесь в Telegram Web и нажмите Enter для продолжения.")
-        except Exception as e:
-            logging.info(f"[{thread_name}] [{self.avd_name}]: Ошибка авторизации для эмулятора: {e}")
+        # Получаем версию из скачанного APK
+        downloaded_version = apk_version_manager.get_app_version(apk_path)
+        if not downloaded_version:
+            logger.error(f"[{thread_name}] [{self.avd_name}] Не удалось определить версию APK. Пропуск установки.")
+            return
 
+        logger.info(f"[{thread_name}] [{self.avd_name}] Версия APK для установки: {downloaded_version}")
+
+        # Получаем текущую версию установленного приложения
+        installed_version = apk_version_manager.get_installed_app_version(emulator_port)
+        if installed_version:
+            logger.info(f"[{thread_name}] [{self.avd_name}] Текущая версия Telegram на устройстве: {installed_version}")
+        else:
+            logger.warning(f"[{thread_name}] [{self.avd_name}] Telegram не установлен на устройстве. Установка новой версии...")
+
+        # Сравнение версий
+        if installed_version == downloaded_version:
+            logger.info(f"[{thread_name}] [{self.avd_name}] Установленная версия актуальна. Установка не требуется.")
+            return
+        elif installed_version and installed_version < downloaded_version:
+            logger.warning(f"[{thread_name}] [{self.avd_name}] Установлена устаревшая версия Telegram. Выполняется обновление...")
+            try:
+                # Обновление APK
+                update_command = [
+                    "adb", "-s", f"emulator-{emulator_port}", "install", "-r", apk_path
+                ]
+                result = subprocess.run(update_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                if "Success" in result.stdout:
+                    logger.info(f"[{thread_name}] [{self.avd_name}] Telegram успешно обновлён до версии {downloaded_version}.")
+                else:
+                    logger.error(f"[{thread_name}] [{self.avd_name}] Ошибка при обновлении Telegram: {result.stderr}")
+            except Exception as e:
+                logger.error(f"[{thread_name}] [{self.avd_name}] Ошибка при попытке обновить приложение: {e}")
+        else:
+            logger.warning(f"[{thread_name}] [{self.avd_name}] Telegram не установлен. Выполняется установка...")
+            try:
+                # Установка APK
+                self.driver.install_app(apk_path)
+                logger.info(f"[{thread_name}] [{self.avd_name}] Telegram успешно установлен.")
+            except Exception as e:
+                logger.error(f"[{thread_name}] [{self.avd_name}] Ошибка при установке Telegram: {e}")

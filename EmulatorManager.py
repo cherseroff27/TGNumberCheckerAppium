@@ -3,12 +3,9 @@ import subprocess
 import sys
 import threading
 import time
-import logging
 
-logging.basicConfig(
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
+from logger_config import Logger
+logger = Logger.get_logger(__name__)
 
 
 class EmulatorManager:
@@ -28,10 +25,10 @@ class EmulatorManager:
             if result.returncode == 0:
                 return result.stdout.strip()
             else:
-                logging.error(f"[{thread_name}] Command failed: {command}\nError: {result.stderr}")
+                logger.error(f"[{thread_name}] Command failed: {command}\nError: {result.stderr}")
                 return None
         except Exception as e:
-            logging.error(f"[{thread_name}] Failed to execute command: {command}\nException: {e}")
+            logger.error(f"[{thread_name}] Failed to execute command: {command}\nException: {e}")
             return None
 
 
@@ -45,13 +42,13 @@ class EmulatorManager:
         avd_list = self._execute_command(command)
         if avd_list:
             if avd_name in avd_list.split():
-                logging.info(f"[{thread_name}] Эмулятор {avd_name} существует.")
+                logger.info(f"[{thread_name}] Эмулятор {avd_name} существует.")
                 return True
             else:
-                logging.info(f"[{thread_name}] Эмулятор {avd_name} отсутствует в списке AVD.")
+                logger.info(f"[{thread_name}] Эмулятор {avd_name} отсутствует в списке AVD.")
                 return False
         else:
-            logging.error(f"[{thread_name}] Не удалось получить список AVD. Команда вернула пустой результат.")
+            logger.error(f"[{thread_name}] Не удалось получить список AVD. Команда вернула пустой результат.")
             return False
 
 
@@ -60,7 +57,7 @@ class EmulatorManager:
         Создаёт новый эмулятор и с указанным образом.
         """
         thread_name = threading.current_thread().name
-        logging.info(f"[{thread_name}] Создание эмулятора {avd_name} с образом {system_image}...")
+        logger.info(f"[{thread_name}] Создание эмулятора {avd_name} с образом {system_image}...")
         create_command = (
             f"avdmanager create avd -n {avd_name} -k \"{system_image}\" --device \"pixel\" --force"
         )
@@ -68,10 +65,10 @@ class EmulatorManager:
         result = self._execute_command(create_command)
 
         if result is not None:
-            logging.info(f"[{thread_name}] Эмулятор {avd_name} успешно создан.")
+            logger.info(f"[{thread_name}] Эмулятор {avd_name} успешно создан.")
             return True
         else:
-            logging.error(f"[{thread_name}] Не удалось создать эмулятор {avd_name}.")
+            logger.error(f"[{thread_name}] Не удалось создать эмулятор {avd_name}.")
             return False
 
 
@@ -82,7 +79,7 @@ class EmulatorManager:
         thread_name = threading.current_thread().name
         command_output = self._execute_command("sdkmanager --list")
         if not command_output:
-            logging.error(f"[{thread_name}] Не удалось получить список пакетов.")
+            logger.error(f"[{thread_name}] Не удалось получить список пакетов.")
             return []
 
         installed_packages = []
@@ -114,10 +111,10 @@ class EmulatorManager:
         Скачивает указанный системный образ, если он отсутствует.
         """
         thread_name = threading.current_thread().name
-        logging.info(f"[{thread_name}] Проверка наличия системного образа {system_image}...")
+        logger.info(f"[{thread_name}] Проверка наличия системного образа {system_image}...")
         list_installed_images = self._get_installed_packages()
         if system_image not in (list_installed_images or ""):
-            logging.info(f"[{thread_name}] Образ {system_image} отсутствует. Начинаю загрузку...")
+            logger.info(f"[{thread_name}] Образ {system_image} отсутствует. Начинаю загрузку...")
 
             # Запускаем команду скачивания в фоне, чтобы можно было отслеживать прогресс
             download_command = f"sdkmanager \"{system_image}\" --verbose"
@@ -125,9 +122,9 @@ class EmulatorManager:
             result = self._execute_command(download_command)
 
             if result is not None:
-                logging.info(f"[{thread_name}] Образ {system_image} успешно загружен.")
+                logger.info(f"[{thread_name}] Образ {system_image} успешно загружен.")
             else:
-                logging.error(f"[{thread_name}] Не удалось загрузить системный образ {system_image}.")
+                logger.error(f"[{thread_name}] Не удалось загрузить системный образ {system_image}.")
 
 
     def wait_for_emulator_ready(self, avd_name, emulator_port, avd_ready_timeout=600):
@@ -135,7 +132,7 @@ class EmulatorManager:
         Ожидает готовности эмулятора.
         """
         thread_name = threading.current_thread().name
-        logging.info(f"[{thread_name}] Ожидание готовности эмулятора...")
+        logger.info(f"[{thread_name}] Ожидание готовности эмулятора...")
 
         start_time = time.time()
         while time.time() - start_time < avd_ready_timeout:
@@ -143,7 +140,7 @@ class EmulatorManager:
             boot_status = self._execute_command(f"adb -s emulator-{emulator_port} shell getprop sys.boot_completed")
             elapsed_time = int(time.time() - start_time)  # Время, прошедшее с начала ожидания
             if boot_status == "1":
-                logging.info(f"[{thread_name}] Эмулятор готов к работе.")
+                logger.info(f"[{thread_name}] Эмулятор готов к работе.")
                 return True
             else:
                 # Перезаписываем сообщение с добавлением времени ожидания
@@ -157,7 +154,7 @@ class EmulatorManager:
         # Очистка последней строки и вывод ошибки
         sys.stdout.write("\r")
         sys.stdout.flush()
-        logging.error(f"[{thread_name}] [{avd_name}] Эмулятор не стал готов к работе "
+        logger.error(f"[{thread_name}] [{avd_name}] Эмулятор не стал готов к работе "
                       f"за отведённое время: {avd_ready_timeout} секунд.")
         return False
 
@@ -194,12 +191,12 @@ class EmulatorManager:
         try:
             # Проверяем, существует ли эмулятор, и создаём его при отсутствии.
             if not self._check_if_emulator_exists(avd_name):
-                logging.info(f"[{thread_name}] Поскольку эмулятор {avd_name} отсутствует в списке AVD - создаю новый эмулятор...")
+                logger.info(f"[{thread_name}] Поскольку эмулятор {avd_name} отсутствует в списке AVD - создаю новый эмулятор...")
                 if self._create_emulator(avd_name, system_image):
                     self._update_avd_config(avd_name, ram_size=f"{ram_size}", disk_size=f"{disk_size}")
-                    logging.info(f"[{thread_name}] Эмулятор {avd_name} успешно создан.")
+                    logger.info(f"[{thread_name}] Эмулятор {avd_name} успешно создан.")
             else:
-                logging.error(f"[{thread_name}] Не удалось создать эмулятор {avd_name}. Прерывание...")
+                logger.error(f"[{thread_name}] Не удалось создать эмулятор {avd_name}. Прерывание...")
                 return False
 
             # Запускаем эмулятор.
@@ -212,7 +209,7 @@ class EmulatorManager:
             return True
 
         except Exception as e:
-            logging.error(f"[{thread_name}] Ошибка при создании или запуске эмулятора {avd_name}: {e}")
+            logger.error(f"[{thread_name}] Ошибка при создании или запуске эмулятора {avd_name}: {e}")
             return False
 
 
@@ -229,26 +226,26 @@ class EmulatorManager:
             snapshots = [f for f in os.listdir(snapshots_dir) if os.path.isdir(os.path.join(snapshots_dir, f))]
             if snapshots:
                 latest_snapshot = max(snapshots, key=lambda snap: os.path.getmtime(os.path.join(snapshots_dir, snap)))
-                logging.info(f"[{thread_name}] Найден самый актуальный снепшот: {latest_snapshot}.")
+                logger.info(f"[{thread_name}] Найден самый актуальный снепшот: {latest_snapshot}.")
 
         # Формирование команды для запуска эмулятора
         snapshot_command = f"emulator -avd {avd_name} -port {emulator_port} -gpu auto"
         if latest_snapshot:
             snapshot_command += f" -snapshot {latest_snapshot}"
-            logging.info(f"[{thread_name}] Используем снепшот '{latest_snapshot}' для запуска эмулятора.")
+            logger.info(f"[{thread_name}] Используем снепшот '{latest_snapshot}' для запуска эмулятора.")
         else:
-            logging.info(f"[{thread_name}] Снепшоты отсутствуют. Эмулятор будет запущен без снепшота.")
+            logger.info(f"[{thread_name}] Снепшоты отсутствуют. Эмулятор будет запущен без снепшота.")
 
         # Запуск эмулятора
         process = subprocess.Popen(snapshot_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-        logging.info(f"[{thread_name}] Эмулятор {avd_name} запущен. Ожидание загрузки...")
+        logger.info(f"[{thread_name}] Эмулятор {avd_name} запущен. Ожидание загрузки...")
 
         if not self.wait_for_emulator_ready(
                 avd_name=avd_name,
                 emulator_port=emulator_port,
                 avd_ready_timeout=avd_ready_timeout
         ):
-            logging.error(f"[{thread_name}] Эмулятор {avd_name} не стал готов к работе.")
+            logger.error(f"[{thread_name}] Эмулятор {avd_name} не стал готов к работе.")
             process.terminate()
             return False
 
@@ -265,9 +262,9 @@ class EmulatorManager:
         command = f"adb -s emulator-{emulator_port} emu avd snapshot save {snapshot_name}"
         result = subprocess.run(command, shell=True, capture_output=True)
         if result.returncode == 0:
-            logging.info(f"[{thread_name}] [{avd_name}] Snapshot '{snapshot_name}' успешно сохранён.")
+            logger.info(f"[{thread_name}] [{avd_name}] Snapshot '{snapshot_name}' успешно сохранён.")
         else:
-            logging.error(f"[{thread_name}] [{avd_name}] Ошибка сохранения snapshot '{snapshot_name}': {result.stderr.decode()}")
+            logger.error(f"[{thread_name}] [{avd_name}] Ошибка сохранения snapshot '{snapshot_name}': {result.stderr.decode()}")
 
 
     @staticmethod
@@ -277,9 +274,9 @@ class EmulatorManager:
         command = f"adb -s emulator-{emulator_port} emu avd snapshot delete {snapshot_name}"
         result = subprocess.run(command, shell=True, capture_output=True)
         if result.returncode == 0:
-            logging.info(f"[{thread_name}] [{avd_name}]: Snapshot '{snapshot_name}' успешно удалён.")
+            logger.info(f"[{thread_name}] [{avd_name}]: Snapshot '{snapshot_name}' успешно удалён.")
         else:
-            logging.error(f"[{thread_name}] [{avd_name}]: Ошибка удаления snapshot '{snapshot_name}': {result.stderr.decode()}")
+            logger.error(f"[{thread_name}] [{avd_name}]: Ошибка удаления snapshot '{snapshot_name}': {result.stderr.decode()}")
 
 
     @staticmethod
@@ -289,7 +286,7 @@ class EmulatorManager:
         """
         thread_name = threading.current_thread().name
 
-        logging.info(f"[{thread_name}] Обновление конфигурации AVD {avd_name}...")
+        logger.info(f"[{thread_name}] Обновление конфигурации AVD {avd_name}...")
         config_path = os.path.expanduser(f"~/.android/avd/{avd_name}.avd/config.ini")
         if os.path.exists(config_path):
             updated_lines = []
@@ -306,7 +303,7 @@ class EmulatorManager:
                             line = "hw.gpu.mode=auto\n"
                         updated_lines.append(line)
             except Exception as e:
-                logging.error(f"[{thread_name}] Ошибка в обновлении конфига AVD: {e}")
+                logger.error(f"[{thread_name}] Ошибка в обновлении конфига AVD: {e}")
 
             # Добавляем параметры, если они отсутствуют
             if not any("hw.ramSize" in l for l in updated_lines):
@@ -321,32 +318,102 @@ class EmulatorManager:
             # Записываем обновлённый конфиг
             with open(config_path, "w") as file:
                 file.writelines(updated_lines)
-            logging.info(f"[{thread_name}] Конфигурация AVD {avd_name} успешно обновлена.")
+            logger.info(f"[{thread_name}] Конфигурация AVD {avd_name} успешно обновлена.")
         else:
-            logging.error(f"[{thread_name}] Конфигурационный файл {config_path} не найден.")
+            logger.error(f"[{thread_name}] Конфигурационный файл {config_path} не найден.")
 
 
-    def delete_emulator(self, avd_name, port, snapshot_name):
+    def delete_emulator(self, avd_name, emulator_port, snapshot_name):
         """
         Удаляет эмулятор с указанным именем.
         """
         thread_name = threading.current_thread().name
 
         try:
-            logging.info(f"[{thread_name}] Удаление эмулятора {avd_name}...")
+            logger.info(f"[{thread_name}] Удаление эмулятора {avd_name}...")
             delete_command = f"avdmanager delete avd -n {avd_name}"
             result = self._execute_command(delete_command)
             if result is not None:
-                logging.info(f"[{thread_name}] Эмулятор {avd_name} успешно удалён.")
+                logger.info(f"[{thread_name}] Эмулятор {avd_name} успешно удалён.")
                 try:
-                    self.delete_snapshot(avd_name, port, snapshot_name)
+                    self.delete_snapshot(avd_name, emulator_port, snapshot_name)
                 except Exception as e:
-                    logging.error(f"[{thread_name}] Ошибка при удалении snapshot {avd_name}: {e}")
+                    logger.error(f"[{thread_name}] Ошибка при удалении snapshot {avd_name}: {e}")
                     return True
                 return True
             else:
-                logging.error(f"[{thread_name}] Не удалось удалить эмулятор {avd_name}.")
+                logger.error(f"[{thread_name}] Не удалось удалить эмулятор {avd_name}.")
                 return False
         except Exception as e:
-            logging.error(f"[{thread_name}] Ошибка при удалении эмулятора {avd_name}: {e}")
+            logger.error(f"[{thread_name}] Ошибка при удалении эмулятора {avd_name}: {e}")
             return False
+
+
+    def close_emulator(self, thread_name, avd_name, emulator_port):
+        try:
+            stop_command = f"adb -s emulator-{emulator_port} emu kill"
+            result = self._execute_command(stop_command)
+            if result is not None:
+                logger.info(f"[{thread_name}] Эмулятор {avd_name} на порту {emulator_port} успешно завершён.")
+                return True
+            else:
+                logger.error(f"[{thread_name}] Не удалось завершить эмулятор {avd_name} на порту {emulator_port}.")
+                return False
+        except Exception as e:
+            logger.error(f"[{thread_name}] Ошибка при завершении работы эмулятора {avd_name} на порту {emulator_port}: {e}")
+            return False
+
+
+    def delete_all_emulators(self):
+        """
+        Удаляет все установленные AVD на устройстве.
+        """
+        thread_name = threading.current_thread().name
+
+        try:
+            # Получаем список всех AVD
+            command = "emulator -list-avds"
+            avd_list = self._execute_command(command)
+
+            if not avd_list:
+                logger.info(f"[{thread_name}] Список AVD пуст. Удаление не требуется.")
+                return True
+
+            avds = avd_list.splitlines()
+            logger.info(f"[{thread_name}] Найдено {len(avds)} AVD: {', '.join(avds)}.")
+
+            for avd_name in avds:
+                logger.info(f"[{thread_name}] Удаление AVD {avd_name}...")
+                delete_command = f"avdmanager delete avd -n {avd_name}"
+                result = self._execute_command(delete_command)
+                if result:
+                    logger.info(f"[{thread_name}] AVD {avd_name} успешно удалён.")
+                else:
+                    logger.error(f"[{thread_name}] Не удалось удалить AVD {avd_name}. Продолжаем удаление остальных.")
+            return True
+        except Exception as e:
+            logger.error(f"[{thread_name}] Ошибка при удалении всех AVD: {e}")
+            return False
+
+
+    @staticmethod
+    def get_avd_list():
+        """
+        Возвращает список доступных AVD, используя emulator -list-avds.
+        """
+        try:
+            # Выполнение команды emulator -list-avds
+            result = subprocess.run(
+                ["emulator", "-list-avds"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            avd_list = result.stdout.splitlines()
+            return avd_list
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Ошибка при вызове emulator: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"Ошибка при обработке списка AVD: {e}")
+            return []

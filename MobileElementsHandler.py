@@ -33,7 +33,7 @@ class MobileElementsHandler:
             driver: WebDriver,
             timeout: int = 30,
             interval: int = 1,
-            enable_logging: bool = True
+            enable_logger: bool = True
     ) -> Optional[WebElement]:
         """
         Ожидает появления элемента по XPath.
@@ -41,7 +41,7 @@ class MobileElementsHandler:
         :param driver: WebDriver Appium.
         :param timeout: Таймаут ожидания.
         :param interval: Интервал между попытками.
-        :param enable_logging: Параметр, отвечающий за включение/отключение логирования
+        :param enable_logger: Параметр, отвечающий за включение/отключение логирования
         :return: Найденный элемент или None.
         """
         locator_tuples = [(By.XPATH, locator) for locator in locators]
@@ -51,10 +51,10 @@ class MobileElementsHandler:
                 driver=driver,
                 timeout=timeout,
                 interval=interval,
-                enable_logging=enable_logging
+                enable_logger=enable_logger
             )
         except TimeoutException as e:
-            if enable_logging:
+            if enable_logger:
                 print(f"Элемент с локаторами {locator_tuples} не найден за {timeout} секунд. Ошибка: {e}")
             return None
 
@@ -65,7 +65,7 @@ class MobileElementsHandler:
             driver: WebDriver,
             timeout: int = 30,
             interval: int = 1,
-            enable_logging: bool = True
+            enable_logger: bool = True
     ) -> Optional[WebElement]:
         """
         Ожидает появления элемента по нескольким локаторам.
@@ -73,7 +73,7 @@ class MobileElementsHandler:
         :param driver: WebDriver Appium.
         :param timeout: Таймаут ожидания.
         :param interval: Интервал между попытками.
-        :param enable_logging: Параметр, отвечающий за включение/отключение логирования
+        :param enable_logger: Параметр, отвечающий за включение/отключение логирования
         :return: Найденный элемент или None.
         """
         end_time = time.time() + timeout
@@ -88,13 +88,13 @@ class MobileElementsHandler:
                 if element:
                     return element
             except StaleElementReferenceException:
-                if enable_logging:
+                if enable_logger:
                     print(f"Элемент с локаторами {locators} обновился в DOM. Повторяем попытку...")
             except TimeoutException:
-                if enable_logging:
+                if enable_logger:
                     print(f"Элемент с локаторами {locators} не найден в течение текущей попытки.")
             except Exception as e:
-                if enable_logging:
+                if enable_logger:
                     print(f"Произошла ошибка при поиске элемента с локаторами {locators}: {e}")
         return None
 

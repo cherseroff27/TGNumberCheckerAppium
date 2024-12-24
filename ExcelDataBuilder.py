@@ -2,12 +2,9 @@ import os
 import re
 
 import pandas as pd
-import logging
 
-logging.basicConfig(
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
+from logger_config import Logger
+logger = Logger.get_logger(__name__)
 
 
 class ExcelDataBuilder:
@@ -18,14 +15,14 @@ class ExcelDataBuilder:
         # Чтение исходного файла Excel
         self.df = pd.read_excel(self.input_path, header=0, dtype=str, engine='openpyxl')
         self.df.columns = self.df.columns.str.strip()
-        logging.info(f"Заголовки таблицы: {self.df.columns.tolist()}")
+        logger.info(f"Заголовки таблицы: {self.df.columns.tolist()}")
 
         if 'Телефон Ответчика' not in self.df.columns:
             raise ValueError("В таблице отсутствует столбец 'Телефон Ответчика'")
 
         if not os.path.exists(self.output_path):
             self._create_empty_excel()
-            logging.info(f"Пустой файл Excel создан по пути: {self.output_path}")
+            logger.info(f"Пустой файл Excel создан по пути: {self.output_path}")
 
     def _create_empty_excel(self):
         directory = os.path.dirname(self.output_path)

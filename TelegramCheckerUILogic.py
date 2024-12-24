@@ -2,38 +2,49 @@ import glob
 import json
 import os
 
-from EmulatorAuthConfigManager import EmulatorAuthConfigManager
 import pandas as pd
 
-import logging
+from EmulatorAuthConfigManager import EmulatorAuthConfigManager
+from EmulatorManager import EmulatorManager
 
-logging.basicConfig(
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
+from logger_config import Logger
+logger = Logger.get_logger(__name__)
 
 
 class TelegramCheckerUILogic:
-    def __init__(self, config_file, default_excel_dir: str, emulator_auth_config_manager: EmulatorAuthConfigManager):
+    THREADS_AMOUNT_CONFIG_FILE = "threads_config.json"  # Имя файла для хранения параметров
+
+    def __init__(
+            self,
+            config_file,
+            default_excel_dir: str,
+            emulator_auth_config_manager: EmulatorAuthConfigManager,
+            emulator_manager: EmulatorManager,
+    ):
         self.config_file = config_file
+
+        self.emulator_manager = emulator_manager
+
         self.default_excel_dir = default_excel_dir
         self.emulator_auth_config_manager = emulator_auth_config_manager
 
         # Список имен AVD, который будет заполняться через интерфейс
         self.avd_names = []
 
+
     def load_config_file_content(self):
         """Загружает содержимое конфигурационного файла для визуализации."""
         if not os.path.exists(self.config_file):
-            logging.warning(f"Конфигурационный файл {self.config_file} не найден.")
+            logger.warning(f"Конфигурационный файл {self.config_file} не найден.")
             return {}
 
         try:
             with open(self.config_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except Exception as e:
-            logging.error(f"Ошибка при чтении конфигурационного файла: {e}")
+            logger.error(f"Ошибка при чтении конфигурационного файла: {e}")
             return {}
+
 
     def get_latest_excel_file(self):
         """Возвращает путь к последнему изменённому Excel-файлу."""
@@ -46,14 +57,18 @@ class TelegramCheckerUILogic:
 
         return max(filtered_files, key=os.path.getmtime) if files else ""
 
-    def get_export_table_path(self, excel_file_path):
+
+    @staticmethod
+    def get_export_table_path(excel_file_path):
         """Возвращает путь для экспортируемой таблицы на основе исходного файла."""
         if not excel_file_path:
             return ""
         base, ext = os.path.splitext(excel_file_path)
         return f"{base}_export{ext}"
 
-    def load_excel_data(self, file_path):
+
+    @staticmethod
+    def load_excel_data(file_path):
         """
         Загружает данные Excel в DataFrame. Если не удается загрузить файл, возвращает None.
         """
@@ -65,7 +80,8 @@ class TelegramCheckerUILogic:
         except Exception as e:
             raise ValueError(f"Ошибка загрузки Excel: {e}")
 
-    def get_column_widths(self, df):
+    @staticmethod
+    def get_column_widths(df):
         """
         Возвращает ширину колонок на основе данных DataFrame.
         Учитывает как заголовки, так и данные в столбцах.
@@ -78,3 +94,41 @@ class TelegramCheckerUILogic:
             max_width = max(len(value) for value in values)
             column_widths[col] = max_width
         return column_widths
+
+
+    def save_threads_config(self, num_threads):
+        """Сохраняет текущие параметры в файл."""
+        config = {"num_threads": num_threads}
+        try:
+            with open(self.THREADS_AMOUNT_CONFIG_FILE, "w") as config_file:
+                json.dump(config, config_file)
+                logger.info(f"В конфиг {self.THREADS_AMOUNT_CONFIG_FILE} записано дефолтное кол-во потоков {num_threads}.")
+        except IOError as e:
+            logger.error(f"Ошибка при сохранении параметров в {self.THREADS_AMOUNT_CONFIG_FILE}: {e}")
+
+
+    def load_threads_config(self):
+        """Загружает параметры из файла."""
+        if os.path.exists(self.THREADS_AMOUNT_CONFIG_FILE):
+            try:
+                with open(self.THREADS_AMOUNT_CONFIG_FILE, "r") as config_file:
+                    content = config_file.read().strip()
+                    if not content:  # Если файл пуст
+                        logger.warning(f"Файл {self.THREADS_AMOUNT_CONFIG_FILE} пуст. Устанавливаются значения по умолчанию.")
+                        return {"num_threads": 1}
+                    logger.info(f"Из конфига {self.THREADS_AMOUNT_CONFIG_FILE} извлечено дефолтное кол-во потоков {json.loads(content)}.")
+                    return json.loads(content)
+            except (json.JSONDecodeError, ValueError) as e:
+                logger.error(f"Ошибка при чтении JSON из {self.THREADS_AMOUNT_CONFIG_FILE}: {e}")
+                return {"num_threads": 1}  # Возвращаем значение по умолчанию
+        else:
+            logger.warning(f"Файл {self.THREADS_AMOUNT_CONFIG_FILE} не найден. Устанавливаются значения по умолчанию.")
+            return {"num_threads": 1}
+
+
+    def delete_all_avds(self):
+        """
+        Удаляет все директории AVD, указанные в конфигурации.
+        """
+        if self.emulator_manager.delete_all_emulators():
+            logger.info("Все AVD успешно удалены.")

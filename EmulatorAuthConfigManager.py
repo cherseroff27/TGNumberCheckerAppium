@@ -1,13 +1,9 @@
 import threading
 import json
 import os
-import logging
 
-
-logging.basicConfig(
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
+from logger_config import Logger
+logger = Logger.get_logger(__name__)
 
 
 class EmulatorAuthConfigManager:
@@ -25,7 +21,7 @@ class EmulatorAuthConfigManager:
 
     def _write_config(self, config):
         with open(self.CONFIG_FILE, 'w', encoding='utf-8') as f:
-            logging.info(f"Записываем конфигурацию: {config}")
+            logger.info(f"Записываем конфигурацию: {config}")
             json.dump(config, f, ensure_ascii=False, indent=4)
 
     def is_authorized(self, avd_name):
@@ -67,7 +63,7 @@ class EmulatorAuthConfigManager:
         with self.lock:
             config = self._read_config()
             if avd_name in config:
-                logging.info(f"Статус эмулятора {avd_name} до сброса: {config.get(avd_name)}")
+                logger.info(f"Статус эмулятора {avd_name} до сброса: {config.get(avd_name)}")
                 config[avd_name]["authorized"] = False
                 self._write_config(config)
 
