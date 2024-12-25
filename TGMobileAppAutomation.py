@@ -57,7 +57,7 @@ class TelegramMobileAppAutomation:
                 self.driver.activate_app(self.telegram_app_package)
 
                 # Ожидание загрузки Telegram (appActivity содержит "org.telegram.messenger")
-                self.wait_for_activity_contains("org.telegram.messenger", timeout=15)
+                self.wait_for_activity_contains("org.telegram.messenger", timeout=30)
                 logger.info(f"[{thread_name}] [{self.avd_name}]: Telegram успешно запущен.")
 
                 # Закрываем Telegram
@@ -70,7 +70,7 @@ class TelegramMobileAppAutomation:
                 self.driver.activate_app(self.telegram_app_package)
 
                 # Ожидание появления главного экрана Telegram (appActivity с "DefaultIcon")
-                self.wait_for_activity_contains("org.telegram.messenger.DefaultIcon", timeout=15)
+                self.wait_for_activity_contains("org.telegram.messenger.DefaultIcon", timeout=30)
                 logger.info(f"[{thread_name}] [{self.avd_name}]: Главный экран Telegram загружен.")
 
                 return True
@@ -96,7 +96,7 @@ class TelegramMobileAppAutomation:
             return False
 
 
-    def wait_for_activity_contains(self, activity_substring, timeout=15):
+    def wait_for_activity_contains(self, activity_substring, timeout=30):
         """
         Ожидает, пока текущее activity не будет содержать указанную подстроку.
         """
@@ -232,7 +232,8 @@ class TelegramMobileAppAutomation:
                 send_button_locator_ru,
                 send_button_locator_en,
                 driver=self.driver,
-                timeout=30
+                timeout=30,
+                interval=3
             )
 
             send_button_el.click()

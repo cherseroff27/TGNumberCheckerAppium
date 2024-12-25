@@ -8,6 +8,7 @@ __pycache__/
 
 #custom_direcroties
 browser_profiles_dir/
+required_tools/
 
 # Папки и файлы настроек PyCharm
 .idea/
