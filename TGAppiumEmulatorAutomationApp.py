@@ -1,34 +1,35 @@
+import multiprocessing
 import re
 import os
+import shutil
+import subprocess
 import sys
 import time
 
-import threading
-from threading import Event
+import pandas as pd
 
 import tkinter as tk
 
-from concurrent.futures import ThreadPoolExecutor
+import threading
+from threading import Event
 from threading import Lock
+from concurrent.futures import ThreadPoolExecutor
 
-import pandas as pd
-from appium.webdriver.extensions.android.nativekey import AndroidKey
 from selenium.webdriver.ie.webdriver import WebDriver
+from appium.webdriver.extensions.android.nativekey import AndroidKey
 
 from ExcelDataBuilder import ExcelDataBuilder
-from TGMobileAppAutomation import TelegramMobileAppAutomation
 from EmulatorAuthConfigManager import EmulatorAuthConfigManager
-from AndroidDriverManager import AndroidDriverManager
+from TelegramApkVersionManager import TelegramApkVersionManager
+from EmulatorAuthWindowManager import EmulatorAuthWindowManager
+
 from EmulatorManager import EmulatorManager
+from AndroidDriverManager import AndroidDriverManager
+from TGMobileAppAutomation import TelegramMobileAppAutomation
+from MobileElementsHandler import MobileElementsHandler as Meh
 
 from TelegramCheckerUI import TelegramCheckerUI
 from TelegramCheckerUILogic import TelegramCheckerUILogic
-
-from TelegramApkVersionManager import TelegramApkVersionManager
-
-from EmulatorAuthWindowManager import EmulatorAuthWindowManager
-
-from MobileElementsHandler import MobileElementsHandler as Meh
 
 from logger_config import Logger
 
@@ -134,6 +135,7 @@ class TGAppiumEmulatorAutomationApp:
             emulator_manager= self.emulator_manager,
         )
         self.ui = TelegramCheckerUI(self.root, self.logic, self)
+        print(sys.executable)
         self.ui.refresh_excel_table()
 
 
@@ -146,7 +148,6 @@ class TGAppiumEmulatorAutomationApp:
         apk_save_dir = os.path.join(project_dir, "telegram_apk")
         apk_name = "Telegram"
         downloaded_apk_path = apk_version_manager.download_latest_telegram_apk(apk_url, apk_save_dir, apk_name)
-        logger.info(f"Актуальная версия Telegram сохранена в: {downloaded_apk_path}")
 
         avd_names = [f"AVD_DEVICE_{i + 1}" for i in range(self.ui.num_threads.get())]
 
@@ -172,21 +173,19 @@ class TGAppiumEmulatorAutomationApp:
         self.emulator_manager.download_system_image(system_image)
         logger.info(f"[{thread_name}] Образ {system_image} загружен и готов к использованию.")
 
-        apk_path = os.path.join(os.getcwd(), "telegram_apk/Telegram.apk")
-
         # Многопоточная работа с эмуляторами
         with ThreadPoolExecutor(max_workers=len(avd_names)) as executor:
             futures = []
             for avd_name in avd_names:
                 future =executor.submit(
                     self.process_emulator,
-                    apk_path=apk_path,
                     avd_name=avd_name,
                     avd_names=avd_names,
                     base_port=base_port,
                     ram_size=ram_size,
                     disk_size=disk_size,
                     system_image=system_image,
+                    apk_path=downloaded_apk_path,
                     emulator_manager=self.emulator_manager,
                     excel_processor=excel_processor,
                     platform_version=platform_version,
@@ -204,7 +203,6 @@ class TGAppiumEmulatorAutomationApp:
 
     def process_emulator(
             self,
-            apk_path: str,
             avd_name: str,
             avd_names: list[str],
             base_port: int,
@@ -213,6 +211,7 @@ class TGAppiumEmulatorAutomationApp:
             system_image: str,
             platform_version: str,
             avd_ready_timeout: int,
+            apk_path: str,
             emulator_manager: EmulatorManager,
             excel_processor: ThreadSafeExcelProcessor,
             apk_version_manager: TelegramApkVersionManager,
@@ -339,7 +338,17 @@ class TGAppiumEmulatorAutomationApp:
                 emulator_auth_config_manager.mark_as_authorized(avd_name)
                 logger.info(f"[{thread_name}] Пометил {avd_name} в конфиге как 'authorized'!")
 
-                time.sleep(3)
+                time.sleep(5)
+
+                if driver is None:
+                    driver = self.setup_driver(
+                        avd_name=avd_name,
+                        emulator_port=emulator_port,
+                        emulator_manager=emulator_manager,
+                        thread_name=thread_name,
+                        android_driver_manager=android_driver_manager,
+                        platform_version=platform_version
+                    )
 
                 tg_mobile_app_automation.prepare_telegram_app()
 
@@ -493,7 +502,7 @@ class TGAppiumEmulatorAutomationApp:
             sys.exit(0)
 
 
-    def terminate_program(self, ui):
+    def terminate_program_during_automation(self, ui):
         logger.info("Завершаем работу приложения...")
         ui.disable_terminate_button()
         self.terminate_flag.set()
@@ -501,6 +510,12 @@ class TGAppiumEmulatorAutomationApp:
         time.sleep(5)
 
 
+    def perform_exit(self):
+        self.root.destroy()
+        sys.exit(0)
+
+
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     app = TGAppiumEmulatorAutomationApp()
     app.root.mainloop()

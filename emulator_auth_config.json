@@ -1,8 +1,8 @@
 {
-    "AVD_DEVICE_2": {
+    "AVD_DEVICE_1": {
         "authorized": true
     },
-    "AVD_DEVICE_1": {
+    "AVD_DEVICE_2": {
         "authorized": true
     }
 }

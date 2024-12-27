@@ -1,10 +1,10 @@
 import json
 import os
-import tkinter as tk
 from threading import Thread
-from tkinter import filedialog, ttk, messagebox
-import tkinter.font as tk_font
 
+import tkinter as tk
+import tkinter.font as tk_font
+from tkinter import filedialog, ttk, messagebox
 
 from logger_config import Logger
 logger = Logger.get_logger(__name__)
@@ -48,23 +48,42 @@ class TelegramCheckerUI:
         # Автозагрузка таблиц и профилей
         self.refresh_excel_table()
 
+        self.widget_states = {}
+
     def create_widgets(self):
-        # Контейнер для первых четырех кнопок
+        # Контейнер для первого ряда четырех кнопок
         top_buttons_frame = tk.Frame(self.root)
         top_buttons_frame.pack(fill="x", pady=5)
 
-        # Центрирование кнопок в контейнере
+        # Центрирование кнопок в контейнере первого ряда четырех кнопок
         top_buttons_inner_frame = tk.Frame(top_buttons_frame)
         top_buttons_inner_frame.pack(anchor="center")
 
         # Добавляем кнопки в контейнер
-        tk.Button(top_buttons_inner_frame, text="Показать содержимое\nконфига AVD", font=self.custom_font, justify="center", command=self.show_config).pack(side="left", padx=5)
+        tk.Label(top_buttons_inner_frame, text="Взаимодействие с эмуляторами и их конфигом (AVD):", font=self.header_font).pack(pady=5)
+        tk.Button(top_buttons_inner_frame, text="Показать\nсодержимое\nконфига AVD", font=self.custom_font, justify="center", command=self.show_config).pack(side="left", padx=5)
         tk.Button(top_buttons_inner_frame, text="Удалить конфиг\n(Информация об AVD)", font=self.custom_font, justify="center", command=self.delete_config).pack(side="left", padx=5)
-        tk.Button(top_buttons_inner_frame, text="Сбросить флаг авторизации\nу всех AVD в конфиге", font=self.custom_font, justify="center", command=self.reset_all_authorizations).pack(side="left", padx=5)
+        tk.Button(top_buttons_inner_frame, text="Сбросить флаг\nавторизации\nу всех AVD в конфиге", font=self.custom_font, justify="center", command=self.reset_all_authorizations).pack(side="left", padx=5)
         tk.Button(top_buttons_inner_frame, text="Удалить все AVD\n(Созданные AVD)", font=self.custom_font, justify="center", command=self.delete_all_avds).pack(side="left", padx=5)
 
+        # Контейнер для второго ряда четырех кнопок
+        under_top_buttons_frame = tk.Frame(self.root)
+        under_top_buttons_frame.pack(fill="x", pady=5)
+
+        # Центрирование кнопок в контейнере второго ряда четырех кнопок
+        under_top_buttons_frame = tk.Frame(top_buttons_frame)
+        under_top_buttons_frame.pack(anchor="center")
+
+        tk.Label(under_top_buttons_frame, text="Установка/удаление инструментов SDK/JDK их системных переменных и конфига:", font=self.header_font).pack(pady=5)
+        tk.Button(under_top_buttons_frame, text="Установить и записать\nJAVA_HOME,\nANDROID_HOME\nв переменные среды", font=self.custom_font, justify="center", command=self.setup_java_and_sdk).pack(side="left", padx=5)
+        tk.Button(under_top_buttons_frame, text="Установить\nsdk_packages\n(adb, emulator,\naapt, build-tools)", font=self.custom_font, justify="center", command=self.setup_sdk_packages).pack(side="left", padx=5)
+        tk.Button(under_top_buttons_frame, text="Записать sdk_packages\n(adb, emulator,\naapt, build-tools)\nв переменные среды", font=self.custom_font, justify="center", command=self.setup_build_tools_and_emulator).pack(side="left", padx=5)
+        tk.Button(under_top_buttons_frame, text="Удалить конфиг переменных,\n переменные среды:\nинструменты SDK, Java JDK",font=self.custom_font, justify="center", command=self.remove_variables_and_paths).pack(side="left", padx=5)
+        tk.Button(under_top_buttons_frame, text="Проверить наличие\n переменных среды:\nинструменты SDK, Java JDK",font=self.custom_font, justify="center", command=self.verify_environment_setup).pack(side="left", padx=5)
+        tk.Button(under_top_buttons_frame, text="Очистить папку\nTEMP_FILES\n(кэш файлов\ncmdline-tools и jdk)",font=self.custom_font, justify="center", command=self.clear_tools_files_cache).pack(side="left", padx=5)
+
         # Файл Excel
-        tk.Label(self.root, text="Файл таблицы Excel:", font=self.header_font).pack(pady=5)
+        tk.Label(self.root, text="Файл таблицы Excel:", font=self.header_font).pack(pady=1)
 
         # Кнопка обновления содержимого Excel-файла
         tk.Button(self.excel_frame, text="Обновить\nтаблицу", font=self.custom_font, command=self.refresh_excel_table).pack(side="left", padx=3)
@@ -77,13 +96,13 @@ class TelegramCheckerUI:
 
 
         # Поле для итогового файла
-        tk.Label(self.root, text="Итоговый файл таблицы Excel:", font=self.header_font).pack(pady=5)
+        tk.Label(self.root, text="Итоговый файл таблицы Excel:", font=self.header_font).pack(pady=1)
         tk.Entry(self.export_frame, textvariable=self.export_table_path, font=self.custom_font, width=50).pack(side="left", fill="x", expand=True, padx=5)
         tk.Button(self.export_frame, text="Открыть\nв проводнике", font=self.custom_font, command=lambda: self.open_in_explorer(self.export_table_path)).pack(side="left", padx=5)
         self.export_frame.pack(fill="x", padx=10, pady=5)
 
         # Содержимое таблицы Excel
-        tk.Label(self.root, text="Содержимое таблицы Excel:", font=self.header_font).pack(pady=5)
+        tk.Label(self.root, text="Содержимое таблицы Excel:", font=self.header_font).pack(pady=1)
         self.excel_treeview.pack(fill="both", expand=True, padx=10, pady=5)
 
 
@@ -104,7 +123,7 @@ class TelegramCheckerUI:
         self.close_program_button = tk.Button(
             control_inner_frame,
             text="Завершить программу и очистить ресурсы",
-            command=lambda: self.app.terminate_program(self),
+            command=lambda: self.app.terminate_program_during_automation(self),
             font=self.custom_font,
         )
         self.close_program_button.pack(side="left", padx=10)
@@ -117,6 +136,73 @@ class TelegramCheckerUI:
             font=self.custom_font,
         )
         self.start_button.pack(side="left", padx=10)
+
+        # Кнопка принудительного завершения программы
+        self.start_button = tk.Button(
+            control_inner_frame,
+            text="Завершить процесс",
+            command=self.exit_app,
+            font=self.custom_font,
+        )
+        self.start_button.pack(side="left", padx=10)
+
+
+
+    def forced_to_exit_app(self):
+        if messagebox.askyesno("Подтверждение", "На данном этапе программу\n"
+                                                "необходимо завершить,\n"
+                                                "чтобы применились изменения\n"
+                                                "глобальных переменных\n"
+                                                "Запустите ее снова вручную."):
+            try:
+                self.app.perform_exit()
+            except Exception as e:
+                logger.error(f"Ошибка при вызове перезапуска: {e}")
+                messagebox.showerror("Ошибка", "Не удалось перезапустить программу.")
+
+
+    def exit_app(self):
+        if messagebox.askyesno("Подтверждение", "Вы уверены, что хотите\n"
+                                                "принудительно завершить программу?\n"
+                                                "Может потребоваться вручную\n"
+                                                "завершить работу эмуляторов, если они запущены.\n"
+                                                "(только в крайних случаях)"):
+            try:
+                self.app.perform_exit()
+            except Exception as e:
+                logger.error(f"Ошибка при вызове перезапуска: {e}")
+                messagebox.showerror("Ошибка", "Не удалось перезапустить программу.")
+
+
+    def setup_java_and_sdk(self):
+        self.logic.setup_java_and_sdk()
+
+        self.forced_to_exit_app()
+
+
+    def setup_sdk_packages(self):
+        self.logic.setup_sdk_packages()
+
+        self.forced_to_exit_app()
+
+    def setup_build_tools_and_emulator(self):
+        self.logic.setup_build_tools_and_emulator()
+
+        self.forced_to_exit_app()
+
+
+    def remove_variables_and_paths(self):
+        self.logic.remove_variables_and_paths()
+
+        self.forced_to_exit_app()
+
+
+    def verify_environment_setup(self):
+        self.logic.verify_environment_setup()
+
+
+    def clear_tools_files_cache(self):
+        self.logic.clear_tools_files_cache()
 
 
     def start_automation(self):
@@ -236,7 +322,7 @@ class TelegramCheckerUI:
             for col in df.columns:
                 self.excel_treeview.heading(col, text=col)
                 self.excel_treeview.column(col, anchor="w")
-                self.excel_treeview.config(height=min(len(df), 10))
+                self.excel_treeview.config(height=min(len(df), 8))
 
             # Добавляем строки в таблицу
             for _, row in df.iterrows():
@@ -279,4 +365,54 @@ class TelegramCheckerUI:
         """Настраивает ширину окна приложения в зависимости от ширины таблицы."""
         total_width = sum(int(self.excel_treeview.column(col, "width")) for col in self.excel_treeview["columns"])
         window_width = min(total_width + 40, 1250)  # Ограничение до 1250 пикселей
-        self.root.geometry(f"{window_width}x600")
+        self.root.geometry(f"{window_width}x725")
+
+
+    def disable_all_widgets(self):
+        """
+        Отключает (state=tk.DISABLED) все элементы интерфейса для предотвращения взаимодействия.
+        """
+        self.widget_states = {}  # Сохраняем состояния виджетов, чтобы восстановить их позже
+
+        def disable_children(widget):
+            """
+            Рекурсивно отключает все дочерние элементы виджета.
+            """
+            for child in widget.winfo_children():
+                try:
+                    # Если виджет имеет атрибут state, сохраняем его состояние и отключаем
+                    self.widget_states[child] = child["state"]
+                    child.config(state=tk.DISABLED)
+                except tk.TclError:
+                    # Если у виджета нет атрибута state, игнорируем
+                    pass
+                # Рекурсивно обрабатываем дочерние виджеты
+                disable_children(child)
+
+        # Отключаем все элементы интерфейса
+        disable_children(self.root)
+        logger.info("Все элементы интерфейса отключены.")
+
+
+    def enable_all_widgets(self):
+        """
+        Включает (state=tk.NORMAL) все элементы интерфейса для взаимодействия.
+        """
+        def enable_children(widget):
+            """
+            Рекурсивно включает все дочерние элементы виджета.
+            """
+            for child in widget.winfo_children():
+                try:
+                    # Если виджет был отключен, восстанавливаем его состояние
+                    if child in self.widget_states:
+                        child.config(state=self.widget_states[child])
+                except tk.TclError:
+                    # Если у виджета нет атрибута state, игнорируем
+                    pass
+                # Рекурсивно обрабатываем дочерние виджеты
+                enable_children(child)
+
+        # Включаем все элементы интерфейса
+        enable_children(self.root)
+        logger.info("Все элементы интерфейса включены.")

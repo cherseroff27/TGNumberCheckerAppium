@@ -313,7 +313,7 @@ class TelegramMobileAppAutomation:
         downloaded_version = apk_version_manager.get_app_version(apk_path)
         if not downloaded_version:
             logger.error(f"[{thread_name}] [{self.avd_name}] Не удалось определить версию APK. Пропуск установки.")
-            return
+            raise
 
         logger.info(f"[{thread_name}] [{self.avd_name}] Версия APK для установки: {downloaded_version}")
 

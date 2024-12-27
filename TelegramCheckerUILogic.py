@@ -1,14 +1,21 @@
 import glob
 import json
 import os
+import sys
 
 import pandas as pd
 
 from EmulatorAuthConfigManager import EmulatorAuthConfigManager
 from EmulatorManager import EmulatorManager
+from AndroidToolManager import AndroidToolManager
 
 from logger_config import Logger
 logger = Logger.get_logger(__name__)
+
+if hasattr(sys, 'frozen'):  # Программа запущена как .exe файл
+    BASE_PROJECT_DIR = os.path.abspath(os.path.dirname(sys.executable))
+else:  # Программа запущена как скрипт .py
+    BASE_PROJECT_DIR = os.path.abspath(os.path.dirname(__file__))
 
 
 class TelegramCheckerUILogic:
@@ -24,12 +31,37 @@ class TelegramCheckerUILogic:
         self.config_file = config_file
 
         self.emulator_manager = emulator_manager
+        self.android_tool_manager = AndroidToolManager(tools_installation_dir=BASE_PROJECT_DIR)
 
         self.default_excel_dir = default_excel_dir
         self.emulator_auth_config_manager = emulator_auth_config_manager
 
         # Список имен AVD, который будет заполняться через интерфейс
         self.avd_names = []
+
+
+    def setup_java_and_sdk(self):
+        self.android_tool_manager.setup_java_and_sdk()
+
+
+    def setup_sdk_packages(self):
+        self.android_tool_manager.setup_sdk_packages()
+
+
+    def setup_build_tools_and_emulator(self):
+        self.android_tool_manager.setup_build_tools_and_emulator()
+
+
+    def remove_variables_and_paths(self):
+        self.android_tool_manager.remove_paths_from_system()
+
+
+    def verify_environment_setup(self):
+        return self.android_tool_manager.verify_environment_setup()
+
+
+    def clear_tools_files_cache(self):
+        self.android_tool_manager.clear_tools_files_cache()
 
 
     def load_config_file_content(self):
@@ -95,12 +127,12 @@ class TelegramCheckerUILogic:
             column_widths[col] = max_width
         return column_widths
 
-
+    # noinspection PyTypeChecker
     def save_threads_config(self, num_threads):
         """Сохраняет текущие параметры в файл."""
         config = {"num_threads": num_threads}
         try:
-            with open(self.THREADS_AMOUNT_CONFIG_FILE, "w") as config_file:
+            with open(self.THREADS_AMOUNT_CONFIG_FILE, "w", encoding='utf-8') as config_file:
                 json.dump(config, config_file)
                 logger.info(f"В конфиг {self.THREADS_AMOUNT_CONFIG_FILE} записано дефолтное кол-во потоков {num_threads}.")
         except IOError as e:
@@ -116,7 +148,7 @@ class TelegramCheckerUILogic:
                     if not content:  # Если файл пуст
                         logger.warning(f"Файл {self.THREADS_AMOUNT_CONFIG_FILE} пуст. Устанавливаются значения по умолчанию.")
                         return {"num_threads": 1}
-                    logger.info(f"Из конфига {self.THREADS_AMOUNT_CONFIG_FILE} извлечено дефолтное кол-во потоков {json.loads(content)}.")
+                    logger.info(f"Из конфига {self.THREADS_AMOUNT_CONFIG_FILE} извлечено дефолтное кол-во потоков: {json.loads(content).get("num_threads", 1)}.")
                     return json.loads(content)
             except (json.JSONDecodeError, ValueError) as e:
                 logger.error(f"Ошибка при чтении JSON из {self.THREADS_AMOUNT_CONFIG_FILE}: {e}")

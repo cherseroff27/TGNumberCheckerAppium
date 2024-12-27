@@ -9,6 +9,7 @@ logger = Logger.get_logger(__name__)
 class EmulatorAuthConfigManager:
     CONFIG_FILE = "emulator_auth_config.json"
 
+    # noinspection PyTypeChecker
     def __init__(self):
         self.lock = threading.Lock()  # Для обеспечения потокобезопасности
         if not os.path.exists(self.CONFIG_FILE):
@@ -19,6 +20,7 @@ class EmulatorAuthConfigManager:
         with open(self.CONFIG_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
 
+    # noinspection PyTypeChecker
     def _write_config(self, config):
         with open(self.CONFIG_FILE, 'w', encoding='utf-8') as f:
             logger.info(f"Записываем конфигурацию: {config}")
