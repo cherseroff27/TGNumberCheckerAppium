@@ -63,7 +63,7 @@ class TelegramMobileAppAutomation:
                 # Закрываем Telegram
                 logger.info(f"[{thread_name}] [{self.avd_name}]: Закрываем приложение Telegram.")
                 self.driver.terminate_app(self.telegram_app_package)
-                time.sleep(2)
+                time.sleep(3)
 
                 # Повторное открытие Telegram
                 logger.info(f"[{thread_name}] [{self.avd_name}]: Повторное открытие приложения Telegram.")
@@ -111,23 +111,8 @@ class TelegramMobileAppAutomation:
         raise TimeoutError(f"[{thread_name}] [{self.avd_name}]: Activity с '{activity_substring}' не загрузилось за {timeout} секунд.")
 
 
-    def ensure_is_in_telegram_app(self):
-        thread_name = threading.current_thread().name
-
-        try:
-            logger.info(f"[{thread_name}] [{self.avd_name}]: Убедились, что приложение Telegram открыто.")
-            if not self.navigate_to_saved_messages():
-                logger.info(f"[{thread_name}] [{self.avd_name}]: Успешно перешли в \"Избранное\".")
-                return False
-            else:
-                self.was_entered_saved_messages_page = True
-            return True
-        except Exception as e:
-            logger.error(f"[{thread_name}] [{self.avd_name}]: Ошибка при попытке открыть Telegram: {e}")
-            raise
-
-
     def check_if_not_authorized(self, thread_name):
+
         start_messaging_button_locator_ru = "//android.widget.TextView[@text='Start Messaging']"
         start_messaging_button_locator_en = "//android.widget.TextView[@text='Начать общение']"
         navigation_menu_locator_ru = "//android.widget.ImageView[@content-desc='Открыть меню навигации']"
@@ -138,19 +123,35 @@ class TelegramMobileAppAutomation:
             navigation_menu_locator_ru,
             navigation_menu_locator_en,
             driver=self.driver,
-            timeout=30
+            timeout=10,
+            interval=2
         )
 
-        text_attribute = found_element.get_attribute("text")
-        content_desc_attribute = found_element.get_attribute("content-desc")
-        if text_attribute and "Start Messaging" in text_attribute or "Начать общение" in text_attribute:
-            logger.error(f"[{thread_name}] [{self.avd_name}]: Вы так и не авторизовались в Telegram вручную!")
-            return False
-        elif content_desc_attribute and "Open navigation menu" in content_desc_attribute or "Открыть меню навигации" in content_desc_attribute:
-            logger.info(f"[{thread_name}] [{self.avd_name}]: Убедились в том, что вы действительно авторизованы!")
-            return True
+        while True:
+            text_attribute = found_element.get_attribute("text")
+            content_desc_attribute = found_element.get_attribute("content-desc")
+            if text_attribute and "Start Messaging" in text_attribute or "Начать общение" in text_attribute:
+                logger.error(f"[{thread_name}] [{self.avd_name}]: Вы так и не авторизовались в Telegram вручную!")
+                return False
+            elif (content_desc_attribute and "Open navigation menu" in content_desc_attribute) or (content_desc_attribute and  "Открыть меню навигации" in content_desc_attribute):
+                logger.info(f"[{thread_name}] [{self.avd_name}]: Убедились в том, что вы действительно авторизованы!")
+                return True
 
-        return False
+
+    def ensure_is_in_telegram_app(self):
+        thread_name = threading.current_thread().name
+
+        try:
+            logger.info(f"[{thread_name}] [{self.avd_name}]: Убедились, что приложение Telegram открыто.")
+            if not self.navigate_to_saved_messages():
+                return False
+            else:
+                logger.info(f"[{thread_name}] [{self.avd_name}]: Успешно перешли в \"Избранное\".")
+                self.was_entered_saved_messages_page = True
+            return True
+        except Exception as e:
+            logger.error(f"[{thread_name}] [{self.avd_name}]: Ошибка при попытке открыть Telegram: {e}")
+            raise
 
 
     def navigate_to_saved_messages(self):
@@ -188,8 +189,8 @@ class TelegramMobileAppAutomation:
             logger.info(f"[{thread_name}] [{self.avd_name}]: Кнопка 'Избранное' успешно нажата!")
             return True
         except Exception as ex:
-            self.ensure_is_in_telegram_app()
             logger.warning(f"[{thread_name}] [{self.avd_name}]: Произошла ошибка в процессе перехода в \"Избранное\": {ex}")
+            self.ensure_is_in_telegram_app()
             return False
 
 
@@ -258,7 +259,7 @@ class TelegramMobileAppAutomation:
             shifted_x = int(center_x + center_x * 0.25)
             shifted_y = int(center_y + center_y * 0.05)
 
-            logger.info(f"[{thread_name}] [{self.avd_name}]: Клик по центру элемента: x={shifted_x}, y={shifted_y}") # Заменить shifted_y на center_y, если не заработает.
+            logger.info(f"[{thread_name}] [{self.avd_name}]: Клик по центру элемента последнего сообщения: x={shifted_x}, y={shifted_y}") # Заменить shifted_y на center_y, если не заработает.
 
 
             # Выполнение клика по центру элемента

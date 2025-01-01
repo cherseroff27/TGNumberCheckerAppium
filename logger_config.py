@@ -59,12 +59,6 @@ class Logger:
             },
         )
 
-        # Формат для файлового лога (без цветов)
-        file_formatter = logging.Formatter(
-            "%(asctime)-20s | %(name)-20s | %(levelname)-7s | %(message)s",
-            datefmt='%Y-%m-%d %H:%M:%S',
-        )
-
         # Консольный хендлер с цветным выводом
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(color_formatter)
@@ -75,7 +69,6 @@ class Logger:
         if log_dir and not os.path.exists(log_dir):
             os.makedirs(log_dir)
         file_handler = RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8")
-        file_handler.setFormatter(file_formatter)
         logger.addHandler(file_handler)
 
         # Добавляем фильтр для преобразования сообщений

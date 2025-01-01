@@ -1,8 +1,6 @@
 import multiprocessing
 import re
 import os
-import shutil
-import subprocess
 import sys
 import time
 
@@ -36,7 +34,15 @@ from logger_config import Logger
 logger = Logger.get_logger(__name__)
 
 
-DEFAULT_EXCEL_TABLE_DIR = os.path.abspath("excel_tables_dir")
+if hasattr(sys, 'frozen'):  # Программа запущена как .exe файл
+    BASE_PROJECT_DIR = os.path.abspath(os.path.dirname(sys.executable))
+else:  # Программа запущена как скрипт .py
+    BASE_PROJECT_DIR = os.path.abspath(os.path.dirname(__file__))
+
+DEFAULT_EXCEL_TABLE_DIR = os.path.join(BASE_PROJECT_DIR, "excel_tables_dir")
+DEFAULT_APK_SAVE_DIR = os.path.join(BASE_PROJECT_DIR, "telegram_apk")
+APK_URL = "https://telegram.org/dl/android/apk"
+APK_NAME = "Telegram_latest_version"
 
 
 class ThreadSafeExcelProcessor:
@@ -123,9 +129,15 @@ class TGAppiumEmulatorAutomationApp:
     def __init__(self):
         self.terminate_flag = Event()
         self.root = tk.Tk()
+
+        if not os.path.exists(DEFAULT_APK_SAVE_DIR):
+            os.makedirs(DEFAULT_APK_SAVE_DIR, exist_ok=True)
+        if not os.path.exists(DEFAULT_EXCEL_TABLE_DIR):
+            os.makedirs(DEFAULT_EXCEL_TABLE_DIR, exist_ok=True)
+
         self.emulator_auth_window_manager = EmulatorAuthWindowManager(self.root)
 
-        self.emulator_manager = EmulatorManager()    # Инициализируем EmulatorManager
+        self.emulator_manager = EmulatorManager()
 
         self.emulator_auth_config_manager = EmulatorAuthConfigManager()
         self.logic = TelegramCheckerUILogic(
@@ -143,11 +155,12 @@ class TGAppiumEmulatorAutomationApp:
         thread_name = threading.current_thread().name
 
         apk_version_manager = TelegramApkVersionManager(telegram_app_package="org.telegram.messenger.web")
-        apk_url = "https://telegram.org/dl/android/apk"
-        project_dir = os.path.dirname(os.path.abspath(__file__))
-        apk_save_dir = os.path.join(project_dir, "telegram_apk")
-        apk_name = "Telegram"
-        downloaded_apk_path = apk_version_manager.download_latest_telegram_apk(apk_url, apk_save_dir, apk_name)
+
+        downloaded_apk_path = apk_version_manager.download_latest_telegram_apk(
+            apk_name=APK_NAME,
+            download_url=APK_URL,
+            save_dir=DEFAULT_APK_SAVE_DIR
+        )
 
         avd_names = [f"AVD_DEVICE_{i + 1}" for i in range(self.ui.num_threads.get())]
 
@@ -319,6 +332,7 @@ class TGAppiumEmulatorAutomationApp:
             )
 
 
+
             while not emulator_auth_config_manager.is_authorized(avd_name):
                 auth_event = self.emulator_auth_window_manager.show_auth_window(avd_name)
                 auth_event.wait()  # Ожидание, пока пользователь не подтвердит авторизацию
@@ -338,17 +352,7 @@ class TGAppiumEmulatorAutomationApp:
                 emulator_auth_config_manager.mark_as_authorized(avd_name)
                 logger.info(f"[{thread_name}] Пометил {avd_name} в конфиге как 'authorized'!")
 
-                time.sleep(5)
-
-                if driver is None:
-                    driver = self.setup_driver(
-                        avd_name=avd_name,
-                        emulator_port=emulator_port,
-                        emulator_manager=emulator_manager,
-                        thread_name=thread_name,
-                        android_driver_manager=android_driver_manager,
-                        platform_version=platform_version
-                    )
+                time.sleep(1)
 
                 tg_mobile_app_automation.prepare_telegram_app()
 
@@ -391,7 +395,7 @@ class TGAppiumEmulatorAutomationApp:
             self.cleanup(thread_name=thread_name, android_driver_manager=android_driver_manager, avd_name=avd_name,
                          appium_port=appium_port, emulator_manager=emulator_manager, emulator_port=emulator_port, ui=app.ui)
 
-            self.terminate_program(self.ui)
+            self.terminate_program_during_automation(self.ui)
 
         self.cleanup(
             thread_name=thread_name,
@@ -403,7 +407,7 @@ class TGAppiumEmulatorAutomationApp:
             ui=app.ui
         )
 
-        self.terminate_program(self.ui)
+        self.terminate_program_during_automation(self.ui)
 
     @staticmethod
     def monitor_initial_window_and_mark_as_started(

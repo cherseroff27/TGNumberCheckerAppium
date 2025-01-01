@@ -42,6 +42,7 @@ class TelegramCheckerUI:
 
         self.start_button = None
         self.close_program_button = None
+        self.exit_button = None
 
         # Создаем виджеты
         self.create_widgets()
@@ -64,6 +65,7 @@ class TelegramCheckerUI:
         tk.Button(top_buttons_inner_frame, text="Показать\nсодержимое\nконфига AVD", font=self.custom_font, justify="center", command=self.show_config).pack(side="left", padx=5)
         tk.Button(top_buttons_inner_frame, text="Удалить конфиг\n(Информация об AVD)", font=self.custom_font, justify="center", command=self.delete_config).pack(side="left", padx=5)
         tk.Button(top_buttons_inner_frame, text="Сбросить флаг\nавторизации\nу всех AVD в конфиге", font=self.custom_font, justify="center", command=self.reset_all_authorizations).pack(side="left", padx=5)
+        tk.Button(top_buttons_inner_frame, text="Посмотреть список\nсозданных AVD", font=self.custom_font, justify="center", command=self.show_existing_avds_list).pack(side="left", padx=5)
         tk.Button(top_buttons_inner_frame, text="Удалить все AVD\n(Созданные AVD)", font=self.custom_font, justify="center", command=self.delete_all_avds).pack(side="left", padx=5)
 
         # Контейнер для второго ряда четырех кнопок
@@ -119,33 +121,34 @@ class TelegramCheckerUI:
         self.threads_entry = ttk.Entry(control_inner_frame, width=10, textvariable=self.num_threads)
         self.threads_entry.pack(side="left", padx=5)
 
-        # Кнопка завершения программы
-        self.close_program_button = tk.Button(
-            control_inner_frame,
-            text="Завершить программу и очистить ресурсы",
-            command=lambda: self.app.terminate_program_during_automation(self),
-            font=self.custom_font,
-        )
-        self.close_program_button.pack(side="left", padx=10)
 
         # Кнопка запуска автоматизации
         self.start_button = tk.Button(
             control_inner_frame,
-            text="Запустить автоматизацию",
+            text="Запустить автоматизацию\nэмуляторов",
             command=self.start_automation,
             font=self.custom_font,
         )
         self.start_button.pack(side="left", padx=10)
 
-        # Кнопка принудительного завершения программы
-        self.start_button = tk.Button(
+
+        # Кнопка завершения программы с очисткой ресурсов во время ее выполнения
+        self.close_program_button = tk.Button(
             control_inner_frame,
-            text="Завершить процесс",
+            text="Завершить программу\nи очистить ресурсы\nво время выполнения",
+            command=lambda: self.app.terminate_program_during_automation(self),
+            font=self.custom_font,
+        )
+        self.close_program_button.pack(side="left", padx=10)
+
+        # Кнопка принудительного завершения программы
+        self.exit_button = tk.Button(
+            control_inner_frame,
+            text="Завершить процесс\n(Принудительно)",
             command=self.exit_app,
             font=self.custom_font,
         )
-        self.start_button.pack(side="left", padx=10)
-
+        self.exit_button.pack(side="left", padx=10)
 
 
     def forced_to_exit_app(self):
@@ -175,18 +178,30 @@ class TelegramCheckerUI:
 
 
     def setup_java_and_sdk(self):
+        self.disable_all_widgets()
+
         self.logic.setup_java_and_sdk()
+
+        self.enable_all_widgets()
 
         self.forced_to_exit_app()
 
 
     def setup_sdk_packages(self):
+        self.disable_all_widgets()
+
         self.logic.setup_sdk_packages()
+
+        self.enable_all_widgets()
 
         self.forced_to_exit_app()
 
     def setup_build_tools_and_emulator(self):
+        self.disable_all_widgets()
+
         self.logic.setup_build_tools_and_emulator()
+
+        self.enable_all_widgets()
 
         self.forced_to_exit_app()
 
@@ -257,39 +272,53 @@ class TelegramCheckerUI:
         """Открывает окно с содержимым конфигурационного файла."""
         config_content = self.logic.load_config_file_content()
 
-        config_window = tk.Toplevel(self.root)
-        config_window.title("Содержимое конфигурации")
-        config_window.geometry("500x300")
-
-        text_widget = tk.Text(config_window, wrap=tk.WORD)
-        text_widget.pack(expand=True, fill=tk.BOTH, padx=10, pady=10)
-
         if config_content:
-            text_widget.insert(tk.END, json.dumps(config_content, ensure_ascii=False, indent=4))
+            messagebox.showinfo(title="Cодержимое конфига",
+                                message=json.dumps(config_content, ensure_ascii=False, indent=4))
         else:
-            text_widget.insert(tk.END, "Конфигурация пуста или файл отсутствует.")
+            messagebox.showinfo(title="Конфигурация пуста",
+                                message="Конфигурация пуста или файл отсутствует.")
 
-        text_widget.config(state=tk.DISABLED)
+
+    def show_existing_avds_list(self):
+        """ Открывает окно со списком созданных AVD. """
+        if self.logic.verify_environment_setup(use_logger=False):
+            avd_list = self.logic.emulator_manager.get_avd_list()
+
+            if avd_list and not avd_list == []:
+                avd_list_text = "\n".join(avd_list)
+                messagebox.showinfo(title="Список созданных AVD", message=avd_list_text)
+            else:
+                messagebox.showinfo(title="Пустой список AVD", message="Список созданных AVD пуст.")
 
 
     def delete_all_avds(self):
-        """
-        Удаляет все существующие AVD через вызов метода в логике.
-        """
-        avd_list = self.logic.emulator_manager.get_avd_list()  # Получаем список AVD
+        """ Удаляет все существующие AVD через вызов метода в логике. """
+        if self.logic.verify_environment_setup(use_logger=False):
+            avd_list = self.logic.emulator_manager.get_avd_list()  # Получаем список AVD
 
-        if not avd_list:
-            messagebox.showinfo("Информация", "Нет доступных AVD для удаления.")
-            return
+            if not avd_list or avd_list == []:
+                messagebox.showinfo(
+                    title="Информация",
+                    message="Нет доступных AVD для удаления."
+                )
+                return
 
-        if messagebox.askyesno("Подтверждение", "Вы уверены, что хотите удалить все AVD?"):
-            try:
-                self.logic.delete_all_avds()  # Метод логики для удаления AVD
-                self.delete_config()
-                messagebox.showinfo("Успех", "Все AVD успешно удалены.\nТакже удален конфиг.")
-            except Exception as e:
-                logger.error(f"Ошибка при удалении AVD: {e}")
-                messagebox.showerror("Ошибка", f"Не удалось удалить все AVD: {e}")
+            avd_list_text = "\n".join(avd_list)
+            if messagebox.askyesno(
+                    title="Подтверждение",
+                    message=f"Вы уверены, что хотите удалить все AVD?\n{avd_list_text}"
+            ):
+                self.disable_all_widgets()
+                try:
+                    self.logic.delete_all_avds()
+                    os.remove(self.logic.config_file)
+                    messagebox.showinfo("Успех", "Все AVD успешно удалены.\nТакже удален конфиг.")
+                    self.enable_all_widgets()
+                except Exception as e:
+                    logger.error(f"Ошибка при удалении AVD: {e}")
+                    messagebox.showerror("Ошибка", f"Не удалось удалить все AVD: {e}")
+
 
     def browse_excel_file(self):
         file_path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx"),

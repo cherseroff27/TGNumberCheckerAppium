@@ -1,7 +1,6 @@
 import glob
 import json
 import os
-import sys
 
 import pandas as pd
 
@@ -12,10 +11,6 @@ from AndroidToolManager import AndroidToolManager
 from logger_config import Logger
 logger = Logger.get_logger(__name__)
 
-if hasattr(sys, 'frozen'):  # Программа запущена как .exe файл
-    BASE_PROJECT_DIR = os.path.abspath(os.path.dirname(sys.executable))
-else:  # Программа запущена как скрипт .py
-    BASE_PROJECT_DIR = os.path.abspath(os.path.dirname(__file__))
 
 
 class TelegramCheckerUILogic:
@@ -31,7 +26,7 @@ class TelegramCheckerUILogic:
         self.config_file = config_file
 
         self.emulator_manager = emulator_manager
-        self.android_tool_manager = AndroidToolManager(tools_installation_dir=BASE_PROJECT_DIR)
+        self.android_tool_manager = AndroidToolManager()
 
         self.default_excel_dir = default_excel_dir
         self.emulator_auth_config_manager = emulator_auth_config_manager
@@ -56,13 +51,12 @@ class TelegramCheckerUILogic:
         self.android_tool_manager.remove_paths_from_system()
 
 
-    def verify_environment_setup(self):
-        return self.android_tool_manager.verify_environment_setup()
+    def verify_environment_setup(self, use_logger:bool=True):
+        return self.android_tool_manager.verify_environment_setup(use_logger=use_logger)
 
 
     def clear_tools_files_cache(self):
         self.android_tool_manager.clear_tools_files_cache()
-
 
     def load_config_file_content(self):
         """Загружает содержимое конфигурационного файла для визуализации."""

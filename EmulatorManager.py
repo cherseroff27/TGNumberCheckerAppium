@@ -1,6 +1,5 @@
 import os
 import subprocess
-import sys
 import threading
 import time
 
@@ -144,16 +143,12 @@ class EmulatorManager:
                 return True
             else:
                 # Перезаписываем сообщение с добавлением времени ожидания
-                sys.stdout.write(
-                    f"\r[{thread_name}] [{avd_name}] Эмулятор пока еще не готов к работе. Ожидаем... "
+                logger.warning(
+                    f"[{thread_name}] [{avd_name}] Эмулятор пока еще не готов к работе. Ожидаем... "
                     f"Прошло: {elapsed_time} секунд."
                 )
-                sys.stdout.flush()
-            time.sleep(1)
+            time.sleep(10)
 
-        # Очистка последней строки и вывод ошибки
-        sys.stdout.write("\r")
-        sys.stdout.flush()
         logger.error(f"[{thread_name}] [{avd_name}] Эмулятор не стал готов к работе "
                       f"за отведённое время: {avd_ready_timeout} секунд.")
         return False
@@ -176,7 +171,7 @@ class EmulatorManager:
 
     def start_or_create_emulator(
             self,
-            avd_name:str,
+            avd_name: str,
             emulator_port: int,
             system_image: str,
             ram_size: str,
@@ -213,7 +208,12 @@ class EmulatorManager:
             return False
 
 
-    def start_emulator_with_optional_snapshot(self, avd_name, avd_ready_timeout, emulator_port):
+    def start_emulator_with_optional_snapshot(
+            self,
+            avd_name: str,
+            avd_ready_timeout: int,
+            emulator_port: int,
+    ):
         """
         Универсальный метод для запуска эмулятора с возможностью загрузки/создания снепшота.
         """
@@ -372,14 +372,12 @@ class EmulatorManager:
 
         try:
             # Получаем список всех AVD
-            command = "emulator -list-avds"
-            avd_list = self._execute_command(command)
+            avds = self.get_avd_list()
 
-            if not avd_list:
+            if not avds:
                 logger.info(f"[{thread_name}] Список AVD пуст. Удаление не требуется.")
                 return True
 
-            avds = avd_list.splitlines()
             logger.info(f"[{thread_name}] Найдено {len(avds)} AVD: {', '.join(avds)}.")
 
             for avd_name in avds:

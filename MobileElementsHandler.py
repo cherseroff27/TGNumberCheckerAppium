@@ -2,7 +2,8 @@ import random
 import time
 from typing import Optional, Tuple
 
-from selenium.common import TimeoutException, StaleElementReferenceException, ElementNotInteractableException
+from selenium.common import TimeoutException, StaleElementReferenceException, \
+    ElementNotInteractableException, NoSuchDriverException
 from appium.webdriver.webdriver import WebDriver
 from appium.webdriver.webelement import WebElement
 from selenium.webdriver.common.by import By
@@ -87,6 +88,9 @@ class MobileElementsHandler:
                 )
                 if element:
                     return element
+            except NoSuchDriverException:
+                if enable_logger:
+                    print(f"Driver для поиска элементов {locators} не существует. Повторяем попытку...")
             except StaleElementReferenceException:
                 if enable_logger:
                     print(f"Элемент с локаторами {locators} обновился в DOM. Повторяем попытку...")

@@ -27,8 +27,8 @@ JAVA_URL = "https://github.com/adoptium/temurin17-binaries/releases/download/jdk
 
 
 class AndroidToolManager:
-    def __init__(self, tools_installation_dir):
-        self.tools_dir = os.path.join(tools_installation_dir, "tools")
+    def __init__(self):
+        self.tools_dir = os.path.join(BASE_PROJECT_DIR, "tools")
         self.sdk_dir = os.path.join(self.tools_dir, "SDK")
         self.java_dir = os.path.join(self.tools_dir, "JAVA")
         self.temp_files_dir = os.path.join(self.tools_dir, "TEMP_FILES")
@@ -38,7 +38,7 @@ class AndroidToolManager:
         for directory in required_directories:
             os.makedirs(directory, exist_ok=True)
 
-        self.state_file_path = os.path.join(tools_installation_dir, "tools_installation_state.json")
+        self.state_file_path = os.path.join(BASE_PROJECT_DIR, "tools_installation_state.json")
         self.state = self.load_state()
 
 
@@ -338,7 +338,7 @@ class AndroidToolManager:
 
         # Пути, которые были добавлены в PATH, согласно verify_environment_setup
         paths_to_remove = [
-            os.path.join(java_home, "jdk-17.0.7+7", "bin"),
+            os.path.join(java_home, "bin"),
             os.path.join(android_home, "cmdline-tools", "latest", "bin"),
             os.path.join(android_home, "platform-tools"),
             os.path.join(android_home, "build-tools", "34.0.0"),
@@ -377,28 +377,31 @@ class AndroidToolManager:
         except FileNotFoundError:
             logger.warning("Ключ реестра не найден. Удаление переменных невозможно.")
         except Exception as e:
-            logger.error(f"Неожиданная ошибка при доступе к реестру: {e}")
+            logger.error(f"Неожиданная ошибка при доступе к реестру: {e}. "
+                         f"Проверьте запущена ли программа от имени Администратора!")
 
 
-    def verify_environment_setup(self):
+    def verify_environment_setup(self, use_logger:bool=True):
         """Проверяет наличие необходимых компонентов и их корректную настройку в системных переменных."""
         logger.info("Проверка установленной среды...")
 
         java_home = os.environ.get("JAVA_HOME")
         if not java_home:
             self.clear_state_file()
-            logger.warning("Переменная среды ANDROID_HOME не установлена.")
+            if use_logger:
+                logger.warning("Переменная среды ANDROID_HOME не установлена.")
             return
 
         android_home = os.environ.get("ANDROID_HOME")
         if not android_home:
             self.clear_state_file()
-            logger.warning("Переменная среды ANDROID_HOME не установлена.")
+            if use_logger:
+                logger.warning("Переменная среды ANDROID_HOME не установлена.")
             return
 
         # Проверяем пути, которые должны существовать
         paths_to_check = {
-            "Java (bin)": os.path.join(java_home, "jdk-17.0.7+7", "bin"),
+            "Java (bin)": os.path.join(java_home, "bin"),
             "SDK (cmdline-tools/bin)": os.path.join(android_home, "cmdline-tools", "latest", "bin"),
             "SDK (build-tools)": os.path.join(android_home, "build-tools", "34.0.0"),
             "SDK (platform-tools)": os.path.join(android_home, "platform-tools"),
@@ -408,9 +411,11 @@ class AndroidToolManager:
         all_paths_exist = True
         for description, path in paths_to_check.items():
             if os.path.exists(path):
-                logger.info(f"{description} найден: {path}")
+                if use_logger:
+                    logger.info(f"{description} найден: {path}")
             else:
-                logger.warning(f"{description} отсутствует: {path}")
+                if use_logger:
+                    logger.warning(f"{description} отсутствует: {path}")
                 all_paths_exist = False
 
 
@@ -424,17 +429,19 @@ class AndroidToolManager:
         for var, expected_value in env_vars_to_check.items():
             actual_value = os.environ.get(var)
             if actual_value and os.path.abspath(actual_value) == os.path.abspath(expected_value):
-                logger.info(f"Переменная среды {var} установлена корректно: {actual_value}")
+                if use_logger:
+                    logger.info(f"Переменная среды {var} установлена корректно: {actual_value}")
             else:
-                logger.warning(
-                    f"Переменная среды {var} отсутствует или имеет некорректное значение. "
-                    f"Ожидаемое: {expected_value}, текущее: {actual_value}"
-                )
+                if use_logger:
+                    logger.warning(
+                        f"Переменная среды {var} отсутствует или имеет некорректное значение. "
+                        f"Ожидаемое: {expected_value}, текущее: {actual_value}"
+                    )
                 all_env_vars_set = False
 
         # Проверяем наличие путей в системной переменной PATH
         path_dirs = os.environ.get("PATH", "").split(";")
-        paths_to_check_in_path = [os.path.join(java_home, "jdk-17.0.7+7", "bin"),
+        paths_to_check_in_path = [os.path.join(java_home, "bin"),
                                   os.path.join(android_home, "cmdline-tools", "latest", "bin"),
                                   os.path.join(android_home, "platform-tools"),
                                   os.path.join(android_home, "build-tools", "34.0.0"),
@@ -443,9 +450,11 @@ class AndroidToolManager:
         all_paths_in_path = True
         for path in paths_to_check_in_path:
             if any(os.path.abspath(path) == os.path.abspath(p) for p in path_dirs):
-                logger.info(f"Путь {path} присутствует в PATH.")
+                if use_logger:
+                    logger.info(f"Путь {path} присутствует в PATH.")
             else:
-                logger.warning(f"Путь {path} отсутствует в PATH.")
+                if use_logger:
+                    logger.warning(f"Путь {path} отсутствует в PATH.")
                 all_paths_in_path = False
 
         # Итоговая проверка
