@@ -1,8 +1,8 @@
 {
     "AVD_DEVICE_1": {
-        "authorized": false
+        "authorized": true
     },
     "AVD_DEVICE_2": {
-        "authorized": false
+        "authorized": true
     }
 }

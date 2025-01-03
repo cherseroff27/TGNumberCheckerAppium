@@ -1,42 +1,25 @@
-import subprocess
+import sys
 
-def list_available_packages():
+
+def is_virtualization_enabled():
+    """
+    Проверяет, включена ли виртуализация на уровне процессора (Intel VT-x/AMD-V).
+    """
     try:
-        # Запускаем команду sdkmanager --list
-        process = subprocess.Popen(
-            ["sdkmanager", "--list"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
-        )
-
-        available_packages = []
-        capture = False
-
-        # Читаем вывод команды построчно
-        for line in process.stdout:
-            # Если строка начинается с "Available packages:", начинаем захват
-            if "Available packages:" in line:
-                capture = True
-                continue
-
-            # Если строка начинается с "Installed packages:", прекращаем захват
-            if "Installed packages:" in line:
-                break
-
-            # Сохраняем строку, если она относится к доступным пакетам
-            if capture:
-                available_packages.append(line.strip())
-
-        # Возвращаем отфильтрованный результат
-        return available_packages
-
+        # Используем ctypes для вызова CPUID на Windows
+        if sys.platform == "win32":
+            import ctypes
+            kernel32 = ctypes.windll.kernel32
+            system_info = ctypes.create_string_buffer(64)
+            kernel32.GetSystemInfo(ctypes.byref(system_info))
+            return "Virtualization" in system_info.raw.decode(errors="ignore")
+        else:
+            # Для других ОС можно реализовать дополнительные проверки
+            return True
     except Exception as e:
-        print(f"Ошибка: {e}")
-        return []
+        print(f"Ошибка проверки виртуализации: {e}")
+        return False
 
-# Используем функцию
-if __name__ == "__main__":
-    packages = list_available_packages()
-    print("Available packages:")
-    print("\n".join(packages))
+
+if is_virtualization_enabled():
+    print(123)
