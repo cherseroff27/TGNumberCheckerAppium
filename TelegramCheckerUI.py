@@ -78,7 +78,7 @@ class TelegramCheckerUI:
 
         tk.Label(under_top_buttons_frame, text="Установка/удаление инструментов SDK/JDK их системных переменных и конфига:", font=self.header_font).pack(pady=5)
         tk.Button(under_top_buttons_frame, text="Установить и записать\nJAVA_HOME,\nANDROID_HOME\nв переменные среды", font=self.custom_font, justify="center", command=self.setup_java_and_sdk).pack(side="left", padx=5)
-        tk.Button(under_top_buttons_frame, text="Установить\nsdk_packages\n(adb, emulator,\naapt, build-tools)", font=self.custom_font, justify="center", command=self.setup_sdk_packages).pack(side="left", padx=5)
+        tk.Button(under_top_buttons_frame, text="Установить sdk_packages\n(adb, emulator,\naapt, build-tools,\nIntel XAML, Hypervisor Driver)", font=self.custom_font, justify="center", command=self.setup_sdk_packages).pack(side="left", padx=5)
         tk.Button(under_top_buttons_frame, text="Записать sdk_packages\n(adb, emulator,\naapt, build-tools)\nв переменные среды", font=self.custom_font, justify="center", command=self.setup_build_tools_and_emulator).pack(side="left", padx=5)
         tk.Button(under_top_buttons_frame, text="Удалить конфиг переменных,\n переменные среды:\nинструменты SDK, Java JDK",font=self.custom_font, justify="center", command=self.remove_variables_and_paths).pack(side="left", padx=5)
         tk.Button(under_top_buttons_frame, text="Проверить наличие\n переменных среды:\nинструменты SDK, Java JDK",font=self.custom_font, justify="center", command=self.verify_environment_setup).pack(side="left", padx=5)
@@ -393,7 +393,7 @@ class TelegramCheckerUI:
     def adjust_window_width(self):
         """Настраивает ширину окна приложения в зависимости от ширины таблицы."""
         total_width = sum(int(self.excel_treeview.column(col, "width")) for col in self.excel_treeview["columns"])
-        window_width = min(total_width + 40, 1250)  # Ограничение до 1250 пикселей
+        window_width = min(total_width + 75, 1250)  # Ограничение до 1250 пикселей
         self.root.geometry(f"{window_width}x725")
 
 

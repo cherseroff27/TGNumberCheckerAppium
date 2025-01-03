@@ -162,11 +162,13 @@ class AndroidToolManager:
             raise Exception("sdkmanager.bat not found. Ensure SDK is set up correctly.")
 
         packages = [
+            "emulator",
             "platform-tools",
+            "build-tools;34.0.0",
             "platforms;android-22",
             "system-images;android-22;google_apis;x86",
-            "emulator",
-            "build-tools;34.0.0"
+            "extras;google;Android_Emulator_Hypervisor_Driver",
+            "extras;intel;Hardware_Accelerated_Execution_Manager",
         ]
 
         logger.info("Принимаем все лицензии...")
@@ -228,6 +230,67 @@ class AndroidToolManager:
             self.save_state()
         else:
             raise Exception("Эмулятор не установлен. Проверьте процесс установки.")
+
+
+    def setup_hypervisor_driver(self):
+        android_home = os.environ.get("ANDROID_HOME")
+        if not android_home:
+            self.clear_state_file()
+            logger.warning("Переменная среды ANDROID_HOME не установлена.")
+            return
+
+        if self.state.get("hypervisor_driver_installed"):
+            logger.info("Эмулятор уже настроен. Пропускаем настройку.")
+            return
+
+        logger.info("Проверяем наличие папки extras и драйверов внутри...")
+
+        hypervisor_intel_path = os.path.join(android_home, "extras", "intel")
+        hypervisor_google_path = os.path.join(android_home, "extras", "google")
+
+        if os.path.exists(hypervisor_intel_path) and os.path.exists(hypervisor_google_path):
+            if self.install_windows_hypervisor_driver():
+                self.state["hypervisor_driver_installed"] = True
+                self.save_state()
+            else:
+                raise Exception("Не удалось установить hypervisor_driver. Проверьте процесс и порядок установки.")
+        else:
+            raise Exception("Папка extras с установщиком hypervisor_driver не найдена. Проверьте процесс и порядок установки.")
+
+
+    def install_windows_hypervisor_driver(self):
+        """
+        Устанавливает драйверы для поддержки виртуализации на Windows:
+        Intel HAXM или Android Emulator Hypervisor Driver.
+        """
+        android_home = os.environ.get("ANDROID_HOME")
+        if not android_home:
+            self.clear_state_file()
+            logger.warning("Переменная среды ANDROID_HOME не установлена.")
+            return
+
+        haxm_installer = os.path.join(android_home, "extras", "intel", "Hardware_Accelerated_Execution_Manager", "silent_install.bat")
+        hypervisor_driver = os.path.join(android_home, "extras", "google", "Android_Emulator_Hypervisor_Driver", "silent_install.bat")
+
+        try:
+            if os.path.exists(haxm_installer):
+                logger.info("Устанавливаем Intel HAXM...")
+                subprocess.run(haxm_installer, check=True)
+            elif os.path.exists(hypervisor_driver):
+                logger.info("Устанавливаем Android Emulator Hypervisor Driver...")
+                subprocess.run(hypervisor_driver, check=True)
+            else:
+                logger.error("Не найдены установочные файлы для HAXM или Hypervisor Driver.")
+                return False
+
+            logger.info("Установка hypervisor_driver завершена успешно.")
+            return True
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Ошибка при установке hypervisor_driver: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Непредвиденная ошибка: {e}")
+            return False
 
 
     @staticmethod
@@ -406,6 +469,8 @@ class AndroidToolManager:
             "SDK (build-tools)": os.path.join(android_home, "build-tools", "34.0.0"),
             "SDK (platform-tools)": os.path.join(android_home, "platform-tools"),
             "SDK (emulator)": os.path.join(android_home, "emulator"),
+            "Intel XAML": os.path.join(android_home, "extras", "intel"),
+            "Android Emulator Hypervisor Driver": os.path.join(android_home, "extras", "google")
         }
 
         all_paths_exist = True
@@ -523,6 +588,7 @@ class AndroidToolManager:
 
 
     def setup_build_tools_and_emulator(self):
-        self.setup_build_tools()
-        self.setup_emulator()
         self.check_tools()
+        self.setup_emulator()
+        self.setup_build_tools()
+        self.setup_hypervisor_driver()
