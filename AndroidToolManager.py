@@ -3,7 +3,7 @@ import ctypes
 import os
 import json
 import shutil
-import sys
+import time
 import zipfile
 
 import requests
@@ -17,28 +17,23 @@ from logger_config import Logger
 
 logger = Logger.get_logger(__name__)
 
-if hasattr(sys, 'frozen'):  # Программа запущена как .exe файл
-    BASE_PROJECT_DIR = os.path.abspath(os.path.dirname(sys.executable))
-else:  # Программа запущена как скрипт .py
-    BASE_PROJECT_DIR = os.path.abspath(os.path.dirname(__file__))
 
 SDK_URL = "https://dl.google.com/android/repository/commandlinetools-win-9477386_latest.zip"
 JAVA_URL = "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.7%2B7/OpenJDK17U-jdk_x64_windows_hotspot_17.0.7_7.zip"
 
 
 class AndroidToolManager:
-    def __init__(self):
-        self.tools_dir = os.path.join(BASE_PROJECT_DIR, "tools")
+    def __init__(self, base_project_dir):
+        self.tools_dir = os.path.join(base_project_dir, "tools")
         self.sdk_dir = os.path.join(self.tools_dir, "SDK")
         self.java_dir = os.path.join(self.tools_dir, "JAVA")
         self.temp_files_dir = os.path.join(self.tools_dir, "TEMP_FILES")
-        self.avd_devices_dir = os.path.join(self.tools_dir, "AVD_DEVICES")
 
-        required_directories = [self.tools_dir, self.temp_files_dir, self.avd_devices_dir]
+        required_directories = [self.tools_dir, self.temp_files_dir]
         for directory in required_directories:
             os.makedirs(directory, exist_ok=True)
 
-        self.state_file_path = os.path.join(BASE_PROJECT_DIR, "tools_installation_state.json")
+        self.state_file_path = os.path.join(base_project_dir, "tools_installation_state.json")
         self.state = self.load_state()
 
 
@@ -245,17 +240,17 @@ class AndroidToolManager:
 
         logger.info("Проверяем наличие папки extras и драйверов внутри...")
 
-        hypervisor_intel_path = os.path.join(android_home, "extras", "intel")
-        hypervisor_google_path = os.path.join(android_home, "extras", "google")
+        hypervisor_driver_intel_path = os.path.join(android_home, "extras", "intel")
+        hypervisor_driver_google_path = os.path.join(android_home, "extras", "google")
 
-        if os.path.exists(hypervisor_intel_path) and os.path.exists(hypervisor_google_path):
+        if os.path.exists(hypervisor_driver_intel_path) and os.path.exists(hypervisor_driver_google_path):
             if self.install_windows_hypervisor_driver():
                 self.state["hypervisor_driver_installed"] = True
                 self.save_state()
             else:
-                raise Exception("Не удалось установить hypervisor_driver. Проверьте процесс и порядок установки.")
+                logger.error("Не удалось установить hypervisor_driver. Проверьте процесс и порядок установки.")
         else:
-            raise Exception("Папка extras с установщиком hypervisor_driver не найдена. Проверьте процесс и порядок установки.")
+            raise Exception("Папка extras с установщиками hypervisor_driver не найдена. Проверьте процесс и порядок установки.")
 
 
     def install_windows_hypervisor_driver(self):
@@ -269,18 +264,27 @@ class AndroidToolManager:
             logger.warning("Переменная среды ANDROID_HOME не установлена.")
             return
 
+        aehd_driver_installer = os.path.join(android_home, "extras", "google", "Android_Emulator_Hypervisor_Driver", "silent_install.bat")
         haxm_installer = os.path.join(android_home, "extras", "intel", "Hardware_Accelerated_Execution_Manager", "silent_install.bat")
-        hypervisor_driver = os.path.join(android_home, "extras", "google", "Android_Emulator_Hypervisor_Driver", "silent_install.bat")
 
         try:
+            if os.path.exists(aehd_driver_installer):
+                logger.info("Удаляем Android Emulator Hypervisor Driver...")
+                subprocess.run([aehd_driver_installer, "-u"], check=True, shell=True, capture_output=True, text=True)
+
+                time.sleep(1)
+
+                logger.info("Устанавливаем Android Emulator Hypervisor Driver...")
+                subprocess.run(aehd_driver_installer, check=True, shell=True, capture_output=True, text=True)
+            else:
+                logger.error("Не найден установочный файл для Android Emulator Hypervisor Driver.")
+                return False
+
             if os.path.exists(haxm_installer):
                 logger.info("Устанавливаем Intel HAXM...")
                 subprocess.run(haxm_installer, check=True)
-            elif os.path.exists(hypervisor_driver):
-                logger.info("Устанавливаем Android Emulator Hypervisor Driver...")
-                subprocess.run(hypervisor_driver, check=True)
             else:
-                logger.error("Не найдены установочные файлы для HAXM или Hypervisor Driver.")
+                logger.error("Не найден установочный файл для HAXM")
                 return False
 
             logger.info("Установка hypervisor_driver завершена успешно.")
@@ -446,7 +450,8 @@ class AndroidToolManager:
 
     def verify_environment_setup(self, use_logger:bool=True):
         """Проверяет наличие необходимых компонентов и их корректную настройку в системных переменных."""
-        logger.info("Проверка установленной среды...")
+        if use_logger:
+            logger.info("Проверка установленной среды...")
 
         java_home = os.environ.get("JAVA_HOME")
         if not java_home:
@@ -524,7 +529,8 @@ class AndroidToolManager:
 
         # Итоговая проверка
         if all_paths_exist and all_env_vars_set and all_paths_in_path:
-            logger.info("Все необходимые компоненты установлены и настроены корректно.")
+            if use_logger:
+                logger.info("Все необходимые компоненты установлены и настроены корректно.")
             return True
         else:
             logger.error("Обнаружены проблемы с установкой и настройкой среды. Проверьте предупреждения выше.")
@@ -551,6 +557,22 @@ class AndroidToolManager:
         else:
             logger.info("Изменения переменных среды применены немедленно.")
 
+
+    def restart_adb_server(self):
+        android_home = os.environ.get("ANDROID_HOME")
+        if not android_home:
+            self.clear_state_file()
+            logger.warning("Переменная среды ANDROID_HOME не установлена. Скорее всего platform-tools не установлены."
+                           "Попробуйте переустановить Android SDK")
+            return
+
+        adb_path = os.path.join(android_home, "platform-tools", "adb.exe")
+
+        logger.info(f"[Останавливаем ADB сервер...]")
+        subprocess.run([adb_path, "kill-server"])
+
+        logger.info(f"[Запускаем ADB сервер...]")
+        subprocess.run([adb_path, "start-server"])
 
 
     def check_tools(self):

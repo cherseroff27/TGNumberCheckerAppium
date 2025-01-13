@@ -1,6 +1,7 @@
 import multiprocessing
 import re
 import os
+import subprocess
 import sys
 import time
 
@@ -145,6 +146,7 @@ class TGAppiumEmulatorAutomationApp:
             default_excel_dir=DEFAULT_EXCEL_TABLE_DIR,
             emulator_auth_config_manager=self.emulator_auth_config_manager,
             emulator_manager= self.emulator_manager,
+            base_project_dir=BASE_PROJECT_DIR,
         )
         self.ui = TelegramCheckerUI(self.root, self.logic, self)
         print(sys.executable)
@@ -170,10 +172,9 @@ class TGAppiumEmulatorAutomationApp:
         logger.info(f"Экспортный файл таблицы: {output_excel_path}")
 
         ram_size = "1024"
-        disk_size = "2048M"
-        avd_ready_timeout = 600
+        disk_size = "1024"
+        avd_ready_timeout = 600 # Таймаут ожидания готовности эмулятора в секундах
         base_port = 5554
-
 
         emulator_auth_config_manager = EmulatorAuthConfigManager()  # Инициализируем EmulatorAuthConfigManager
         excel_processor = ThreadSafeExcelProcessor(input_excel_path, output_excel_path) # Инициализация ExcelDataBuilder

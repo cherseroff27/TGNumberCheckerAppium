@@ -31,7 +31,7 @@ class EmulatorManager:
             return None
 
 
-    def _check_if_emulator_exists(self, avd_name):
+    def _check_if_avd_exists(self, avd_name):
         """
         Проверяет, существует ли эмулятор с указанным именем.
         """
@@ -51,12 +51,12 @@ class EmulatorManager:
             return False
 
 
-    def _create_emulator(self, avd_name, system_image):
+    def _create_avd(self, avd_name, system_image):
         """
-        Создаёт новый эмулятор и с указанным образом.
+        Создаёт новый AVD с указанным образом.
         """
         thread_name = threading.current_thread().name
-        logger.info(f"[{thread_name}] Создание эмулятора {avd_name} с образом {system_image}...")
+        logger.info(f"[{thread_name}] Создание AVD {avd_name} с образом {system_image}...")
         create_command = (
             f"avdmanager create avd -n {avd_name} -k \"{system_image}\" --device \"pixel\" --force"
         )
@@ -64,10 +64,10 @@ class EmulatorManager:
         result = self._execute_command(create_command)
 
         if result is not None:
-            logger.info(f"[{thread_name}] Эмулятор {avd_name} успешно создан.")
+            logger.info(f"[{thread_name}] AVD {avd_name} успешно создан.")
             return True
         else:
-            logger.error(f"[{thread_name}] Не удалось создать эмулятор {avd_name}.")
+            logger.error(f"[{thread_name}] Не удалось создать AVD {avd_name}.")
             return False
 
 
@@ -185,13 +185,13 @@ class EmulatorManager:
 
         try:
             # Проверяем, существует ли эмулятор, и создаём его при отсутствии.
-            if not self._check_if_emulator_exists(avd_name):
-                logger.info(f"[{thread_name}] Поскольку эмулятор {avd_name} отсутствует в списке AVD - создаю новый эмулятор...")
-                if self._create_emulator(avd_name, system_image):
+            if not self._check_if_avd_exists(avd_name):
+                logger.info(f"[{thread_name}] Поскольку AVD {avd_name} отсутствует в списке AVD - создаю новый AVD...")
+                if self._create_avd(avd_name, system_image):
                     self._update_avd_config(avd_name, ram_size=f"{ram_size}", disk_size=f"{disk_size}")
-                    logger.info(f"[{thread_name}] Эмулятор {avd_name} успешно создан.")
+                    logger.info(f"[{thread_name}] AVD {avd_name} успешно создан.")
             else:
-                logger.error(f"[{thread_name}] Не удалось создать эмулятор {avd_name}. Прерывание...")
+                logger.error(f"[{thread_name}] Не удалось создать AVD {avd_name}. Прерывание...")
                 return False
 
             # Запускаем эмулятор.
@@ -220,6 +220,16 @@ class EmulatorManager:
         thread_name = threading.current_thread().name
         snapshots_dir = os.path.expanduser(f"~/.android/avd/{avd_name}.avd/snapshots/")
 
+        project_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # Пути для лог-файлов
+        stdout_log_path = os.path.join(project_dir, f"{avd_name}_stdout.log")
+        stderr_log_path = os.path.join(project_dir, f"{avd_name}_stderr.log")
+
+        logger.info(f"[{thread_name}] Лог-файлы будут сохранены в:")
+        logger.info(f"  [stdout]: {stdout_log_path}")
+        logger.info(f"  [stderr]: {stderr_log_path}")
+
         # Определение самого актуального снепшота
         latest_snapshot = None
         if os.path.exists(snapshots_dir):
@@ -229,25 +239,65 @@ class EmulatorManager:
                 logger.info(f"[{thread_name}] Найден самый актуальный снепшот: {latest_snapshot}.")
 
         # Формирование команды для запуска эмулятора
-        snapshot_command = f"emulator -avd {avd_name} -port {emulator_port} -gpu auto"
+        snapshot_command = f"emulator -avd {avd_name} -port {emulator_port} -gpu auto -verbose"
         if latest_snapshot:
             snapshot_command += f" -snapshot {latest_snapshot}"
             logger.info(f"[{thread_name}] Используем снепшот '{latest_snapshot}' для запуска эмулятора.")
         else:
             logger.info(f"[{thread_name}] Снепшоты отсутствуют. Эмулятор будет запущен без снепшота.")
 
-        # Запуск эмулятора
-        process = subprocess.Popen(snapshot_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-        logger.info(f"[{thread_name}] Эмулятор {avd_name} запущен. Ожидание загрузки...")
+        # Открытие файлов для записи логов
+        stdout_log = open(stdout_log_path, "w")
+        stderr_log = open(stderr_log_path, "w")
 
-        if not self.wait_for_emulator_ready(
-                avd_name=avd_name,
-                emulator_port=emulator_port,
-                avd_ready_timeout=avd_ready_timeout
-        ):
-            logger.error(f"[{thread_name}] Эмулятор {avd_name} не стал готов к работе.")
-            process.terminate()
-            return False
+        try:
+            # Запуск эмулятора с выводом в лог-файлы
+            process = subprocess.Popen(
+                snapshot_command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                shell=True,
+                text=True,
+                bufsize=1
+            )
+            logger.info(f"[{thread_name}] Эмулятор {avd_name} запущен. Ожидание загрузки...")
+
+            # Чтение потоков в реальном времени
+            def read_stream(stream, log_file, log_func):
+                for line in stream:
+                    line = line.strip()
+                    if line:
+                        log_func(f"[{thread_name}] {line}")
+                        log_file.write(line + "\n")
+                        log_file.flush()
+
+            stdout_thread = threading.Thread(
+                target=read_stream,
+                args=(process.stdout, stdout_log, logger.info),
+                daemon=True
+            )
+            stderr_thread = threading.Thread(
+                target=read_stream,
+                args=(process.stderr, stderr_log, logger.error),
+                daemon=True
+            )
+            stdout_thread.start()
+            stderr_thread.start()
+
+            # Ждём готовности эмулятора
+            if not self.wait_for_emulator_ready(
+                    avd_name=avd_name,
+                    emulator_port=emulator_port,
+                    avd_ready_timeout=avd_ready_timeout
+            ):
+                logger.error(f"[{thread_name}] Эмулятор {avd_name} не стал готов к работе.")
+                process.terminate()
+                return False
+
+        finally:
+            # Гарантированно закрываем файлы
+            stdout_log.close()
+            stderr_log.close()
 
         return process
 
@@ -280,9 +330,9 @@ class EmulatorManager:
 
 
     @staticmethod
-    def _update_avd_config(avd_name, ram_size="1024", disk_size="2048M"):
+    def _update_avd_config(avd_name, ram_size="1024", disk_size="1024"):
         """
-        Обновляет параметры AVD после его создания: RAM, Disk Size, GPU.
+        Обновляет параметры AVD после его создания: RAM, Disk Size.
         """
         thread_name = threading.current_thread().name
 
@@ -296,11 +346,7 @@ class EmulatorManager:
                         if line.startswith("hw.ramSize"):
                             line = f"hw.ramSize={ram_size}\n"
                         elif line.startswith("disk.dataPartition.size"):
-                            line = f"disk.dataPartition.size={disk_size}\n"
-                        elif line.startswith("hw.gpu.enabled"):
-                            line = "hw.gpu.enabled=yes\n"
-                        elif line.startswith("hw.gpu.mode"):
-                            line = "hw.gpu.mode=auto\n"
+                            line = f"disk.dataPartition.size={disk_size}M\n"
                         updated_lines.append(line)
             except Exception as e:
                 logger.error(f"[{thread_name}] Ошибка в обновлении конфига AVD: {e}")
@@ -310,10 +356,6 @@ class EmulatorManager:
                 updated_lines.append(f"hw.ramSize={ram_size}\n")
             if not any("disk.dataPartition.size" in l for l in updated_lines):
                 updated_lines.append(f"disk.dataPartition.size={disk_size}\n")
-            if not any("hw.gpu.enabled" in l for l in updated_lines):
-                updated_lines.append("hw.gpu.enabled=yes\n")
-            if not any("hw.gpu.mode" in l for l in updated_lines):
-                updated_lines.append("hw.gpu.mode=auto\n")
 
             # Записываем обновлённый конфиг
             with open(config_path, "w") as file:

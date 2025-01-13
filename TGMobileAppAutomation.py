@@ -219,7 +219,7 @@ class TelegramMobileAppAutomation:
 
             if "Сообщение" in message_field_el.get_attribute("text") or "Message" in message_field_el.get_attribute("text"):
                 message_field_el.click()
-                time.sleep(2)
+                time.sleep(1)
 
                 message_field_el.send_keys(phone_number)
                 time.sleep(2)

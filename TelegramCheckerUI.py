@@ -1,5 +1,6 @@
 import json
 import os
+import threading
 from threading import Thread
 
 import tkinter as tk
@@ -67,6 +68,7 @@ class TelegramCheckerUI:
         tk.Button(top_buttons_inner_frame, text="Сбросить флаг\nавторизации\nу всех AVD в конфиге", font=self.custom_font, justify="center", command=self.reset_all_authorizations).pack(side="left", padx=5)
         tk.Button(top_buttons_inner_frame, text="Посмотреть список\nсозданных AVD", font=self.custom_font, justify="center", command=self.show_existing_avds_list).pack(side="left", padx=5)
         tk.Button(top_buttons_inner_frame, text="Удалить все AVD\n(Созданные AVD)", font=self.custom_font, justify="center", command=self.delete_all_avds).pack(side="left", padx=5)
+        tk.Button(top_buttons_inner_frame, text="Перезапустить\nabv-server", font=self.custom_font, justify="center", command=self.restart_adb_server).pack(side="left", padx=5)
 
         # Контейнер для второго ряда четырех кнопок
         under_top_buttons_frame = tk.Frame(self.root)
@@ -151,6 +153,13 @@ class TelegramCheckerUI:
         self.exit_button.pack(side="left", padx=10)
 
 
+    def restart_adb_server(self):
+        self.run_task_in_thread(
+            task=self.logic.restart_adb_server,
+            should_exit=False
+        )
+
+
     def forced_to_exit_app(self):
         if messagebox.askyesno("Подтверждение", "На данном этапе программу\n"
                                                 "необходимо завершить,\n"
@@ -178,38 +187,31 @@ class TelegramCheckerUI:
 
 
     def setup_java_and_sdk(self):
-        self.disable_all_widgets()
-
-        self.logic.setup_java_and_sdk()
-
-        self.enable_all_widgets()
-
-        self.forced_to_exit_app()
+        self.run_task_in_thread(
+            task=self.logic.setup_java_and_sdk,
+            should_exit=True
+        )
 
 
     def setup_sdk_packages(self):
-        self.disable_all_widgets()
+        self.run_task_in_thread(
+            task=self.logic.setup_sdk_packages,
+            should_exit=True
+        )
 
-        self.logic.setup_sdk_packages()
-
-        self.enable_all_widgets()
-
-        self.forced_to_exit_app()
 
     def setup_build_tools_and_emulator(self):
-        self.disable_all_widgets()
-
-        self.logic.setup_build_tools_and_emulator()
-
-        self.enable_all_widgets()
-
-        self.forced_to_exit_app()
+        self.run_task_in_thread(
+            task=self.logic.setup_build_tools_and_emulator,
+            should_exit=True
+        )
 
 
     def remove_variables_and_paths(self):
-        self.logic.remove_variables_and_paths()
-
-        self.forced_to_exit_app()
+        self.run_task_in_thread(
+            task=self.logic.remove_variables_and_paths,
+            should_exit=True
+        )
 
 
     def verify_environment_setup(self):
@@ -220,6 +222,35 @@ class TelegramCheckerUI:
         self.logic.clear_tools_files_cache()
 
 
+    def run_task_in_thread(self, task, *args, should_exit=True, **kwargs):
+        """
+        Запускает задачу в отдельном потоке, отключая интерфейс на время выполнения.
+        :param task: Функция задачи.
+        :param args: Позиционные аргументы для задачи.
+        :param kwargs: Именованные аргументы для задачи.
+        :param should_exit: Если True, вызывает self.forced_to_exit_app() после завершения задачи.
+        """
+
+        def task_wrapper():
+            try:
+                # Выполняем задачу с переданными аргументами
+                task(*args, **kwargs)
+            except Exception as e:
+                logger.error(f"Ошибка при выполнении задачи: {e}")
+                messagebox.showerror("Ошибка", f"Произошла ошибка: {e}")
+            finally:
+                self.enable_all_widgets()
+                if should_exit:
+                    self.forced_to_exit_app()
+
+        # Отключаем все виджеты перед запуском задачи
+        self.disable_all_widgets()
+
+        # Запускаем задачу в отдельном потоке
+        thread = threading.Thread(target=task_wrapper, daemon=True)
+        thread.start()
+
+
     def start_automation(self):
         """
         Закрывает главное окно, запускает автоматизацию.
@@ -228,9 +259,7 @@ class TelegramCheckerUI:
         if self.start_button:
             self.start_button.config(state=tk.DISABLED)
 
-        # self.root.destroy()  # Закрываем главное окно
         automation_thread = Thread(target=self.app.run_multithreaded_automation, daemon=True)    # Запускаем автоматизацию
-        # self.root.withdraw()
         automation_thread.start()
 
 
@@ -294,6 +323,7 @@ class TelegramCheckerUI:
 
     def delete_all_avds(self):
         """ Удаляет все существующие AVD через вызов метода в логике. """
+
         if self.logic.verify_environment_setup(use_logger=False):
             avd_list = self.logic.emulator_manager.get_avd_list()  # Получаем список AVD
 
@@ -309,12 +339,13 @@ class TelegramCheckerUI:
                     title="Подтверждение",
                     message=f"Вы уверены, что хотите удалить все AVD?\n{avd_list_text}"
             ):
-                self.disable_all_widgets()
                 try:
-                    self.logic.delete_all_avds()
+                    self.run_task_in_thread(
+                        task=self.logic.delete_all_avds,
+                        should_exit=False
+                    )
                     os.remove(self.logic.config_file)
                     messagebox.showinfo("Успех", "Все AVD успешно удалены.\nТакже удален конфиг.")
-                    self.enable_all_widgets()
                 except Exception as e:
                     logger.error(f"Ошибка при удалении AVD: {e}")
                     messagebox.showerror("Ошибка", f"Не удалось удалить все AVD: {e}")
@@ -444,4 +475,4 @@ class TelegramCheckerUI:
 
         # Включаем все элементы интерфейса
         enable_children(self.root)
-        logger.info("Все элементы интерфейса включены.")
+        logger.info("Все элементы интерфейса включены обратно.")

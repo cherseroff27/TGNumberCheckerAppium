@@ -22,17 +22,22 @@ class TelegramCheckerUILogic:
             default_excel_dir: str,
             emulator_auth_config_manager: EmulatorAuthConfigManager,
             emulator_manager: EmulatorManager,
+            base_project_dir,
     ):
         self.config_file = config_file
 
         self.emulator_manager = emulator_manager
-        self.android_tool_manager = AndroidToolManager()
+        self.android_tool_manager = AndroidToolManager(base_project_dir=base_project_dir)
 
         self.default_excel_dir = default_excel_dir
         self.emulator_auth_config_manager = emulator_auth_config_manager
 
         # Список имен AVD, который будет заполняться через интерфейс
         self.avd_names = []
+
+
+    def restart_adb_server(self):
+        self.android_tool_manager.restart_adb_server()
 
 
     def setup_java_and_sdk(self):
@@ -134,7 +139,7 @@ class TelegramCheckerUILogic:
 
 
     def load_threads_config(self):
-        """Загружает параметры из файла."""
+        """Загружает параметры количества потоков из файла."""
         if os.path.exists(self.THREADS_AMOUNT_CONFIG_FILE):
             try:
                 with open(self.THREADS_AMOUNT_CONFIG_FILE, "r") as config_file:
