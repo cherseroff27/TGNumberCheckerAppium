@@ -22,6 +22,7 @@ class AndroidDriverManager:
         self.emulator_auth_config_manager = emulator_auth_config_manager
         self.driver = None
         self.process = None
+        self.appium_server_url = f"http://{self.local_ip}:{self.port}"
 
 
     @staticmethod
@@ -152,7 +153,6 @@ class AndroidDriverManager:
         options.ignoreUnimportantViews = True
         options.disableWindowAnimation = True
         options.auto_grant_permissions = True
-        options.disableWindowAnimation = True
         options.native_web_screenshot = True
         options.noReset = True
 
@@ -162,10 +162,8 @@ class AndroidDriverManager:
     def create_driver(self, avd_name, emulator_port, platform_version: str="9"):
         thread_name = threading.current_thread().name
 
-        appium_server_url = f"http://{self.local_ip}:{self.port}"
-
-        if not self.is_appium_server_running(appium_server_url):
-            raise RuntimeError(f"[{thread_name}] Appium сервер на {appium_server_url} не запущен.")
+        if not self.is_appium_server_running(self.appium_server_url):
+            raise RuntimeError(f"[{thread_name}] Appium сервер на {self.appium_server_url} не запущен.")
 
         # Проверяем подключение эмулятора через ADB
         if not self.is_device_connected_adb(emulator_port):
@@ -174,8 +172,8 @@ class AndroidDriverManager:
         options = self.get_ui_automator2_options(avd_name, platform_version, emulator_port)
 
         try:
-            logger.info(f"[{thread_name}] Создаём драйвер для {avd_name} на emulator-{emulator_port} через {appium_server_url}")
-            self.driver = webdriver.Remote(command_executor=appium_server_url, options=options)
+            logger.info(f"[{thread_name}] Создаём драйвер для {avd_name} на emulator-{emulator_port} через {self.appium_server_url}")
+            self.driver = webdriver.Remote(command_executor=self.appium_server_url, options=options)
 
 
             return self.driver
@@ -204,10 +202,6 @@ class AndroidDriverManager:
             logger.warning(f"[{thread_name}] Устройство {device_id} не подключено.")
             return False
 
-
-    def ensure_adb_connection(self):
-        command = f"adb.exe connect {self.local_ip}:{self.port}"
-        self.execute_adb_command(command)
 
     def stop_driver(self):
         if self.driver:

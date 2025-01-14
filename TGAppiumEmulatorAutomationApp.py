@@ -1,7 +1,6 @@
 import multiprocessing
 import re
 import os
-import subprocess
 import sys
 import time
 
@@ -142,11 +141,10 @@ class TGAppiumEmulatorAutomationApp:
 
         self.emulator_auth_config_manager = EmulatorAuthConfigManager()
         self.logic = TelegramCheckerUILogic(
-            config_file=EmulatorAuthConfigManager.CONFIG_FILE,
-            default_excel_dir=DEFAULT_EXCEL_TABLE_DIR,
-            emulator_auth_config_manager=self.emulator_auth_config_manager,
-            emulator_manager= self.emulator_manager,
             base_project_dir=BASE_PROJECT_DIR,
+            emulator_manager= self.emulator_manager,
+            default_excel_dir=DEFAULT_EXCEL_TABLE_DIR,
+            avd_list_info_config_file=EmulatorAuthConfigManager.CONFIG_FILE,
         )
         self.ui = TelegramCheckerUI(self.root, self.logic, self)
         print(sys.executable)
@@ -171,9 +169,9 @@ class TGAppiumEmulatorAutomationApp:
         output_excel_path = app.ui.export_table_path.get()
         logger.info(f"Экспортный файл таблицы: {output_excel_path}")
 
-        ram_size = "1024"
-        disk_size = "1024"
-        avd_ready_timeout = 600 # Таймаут ожидания готовности эмулятора в секундах
+        ram_size = self.ui.ram_size.get()
+        disk_size = self.ui.disk_size.get()
+        avd_ready_timeout = self.ui.avd_ready_timeout.get()
         base_port = 5554
 
         emulator_auth_config_manager = EmulatorAuthConfigManager()  # Инициализируем EmulatorAuthConfigManager
@@ -208,6 +206,7 @@ class TGAppiumEmulatorAutomationApp:
                     emulator_auth_config_manager=emulator_auth_config_manager,
                 )
                 futures.append(future)
+
             # Ждём завершения потоков
             for future in futures:
                 future.result()
@@ -224,12 +223,12 @@ class TGAppiumEmulatorAutomationApp:
             disk_size: str,
             system_image: str,
             platform_version: str,
-            avd_ready_timeout: int,
             apk_path: str,
             emulator_manager: EmulatorManager,
             excel_processor: ThreadSafeExcelProcessor,
             apk_version_manager: TelegramApkVersionManager,
             emulator_auth_config_manager: EmulatorAuthConfigManager,
+            avd_ready_timeout: int = 1200,
     ):
         """Запускает эмулятор и проверяет номера на зарегистрированность."""
         thread_name = None
@@ -286,11 +285,13 @@ class TGAppiumEmulatorAutomationApp:
                 self.cleanup(thread_name=thread_name, android_driver_manager=android_driver_manager, avd_name=avd_name,
                              appium_port=appium_port, emulator_manager=emulator_manager, emulator_port=emulator_port, ui=app.ui)
 
+
             android_driver_manager = AndroidDriverManager(
                 local_ip="127.0.0.1",
                 port=appium_port,
                 emulator_auth_config_manager=emulator_auth_config_manager
             )
+
 
             driver = self.setup_driver(
                 avd_name=avd_name,
@@ -470,6 +471,8 @@ class TGAppiumEmulatorAutomationApp:
         except Exception as e:
             logger.error(f"[{thread_name}] Ошибка при инициализации драйвера для {avd_name}: {e}")
             return
+
+
     @staticmethod
     def get_platform_version_from_system_image(system_image):
         if "android-28" in system_image:

@@ -19,12 +19,19 @@ class TelegramCheckerUI:
         self.root.title("Telegram Number Checker")
         self.root.geometry("1200x900")
 
-        self.header_font = tk_font.Font(family="Helvetica", size=12, weight="bold")
+        self.header_font = tk_font.Font(family="Helvetica", size=11, weight="bold")
         self.custom_font = tk_font.Font(family="Calibri", size=11, weight="normal")
 
         self.saved_config = self.logic.load_threads_config()
-        default_threads = self.saved_config.get("num_threads", 1)
-        self.num_threads = tk.IntVar(value=default_threads)  # Устанавливаем количество потоков по умолчанию default_threads
+        self.num_threads = tk.IntVar(value=self.saved_config.get("num_threads", 1))
+
+        self.ram_size = tk.IntVar(value=logic.get_avd_property("ram_size"))
+        self.disk_size = tk.IntVar(value=logic.get_avd_property("disk_size"))
+        self.avd_ready_timeout = tk.IntVar(value=logic.get_avd_property("emulator_ready_timeout"))
+
+        # Исходные данные по умолчанию
+        self.default_avd_name_template = tk.StringVar(value=logic.default_avd_name_template)
+        self.default_avd_name_template_entry = ttk.Entry(self.root, width=10, textvariable=self.default_avd_name_template)
 
         # Интерфейсные переменные
         latest_excel_file = logic.get_latest_excel_file()
@@ -38,12 +45,11 @@ class TelegramCheckerUI:
         self.export_frame = ttk.Frame(self.root)
         self.excel_treeview = ttk.Treeview(columns=[], show="headings", height=5)
 
-        # Поле для ввода количества потоков
-        self.threads_entry = ttk.Entry(self.root, width=10, textvariable=self.num_threads)
 
         self.start_button = None
         self.close_program_button = None
         self.exit_button = None
+        self.loading_overlay = None
 
         # Создаем виджеты
         self.create_widgets()
@@ -51,6 +57,7 @@ class TelegramCheckerUI:
         self.refresh_excel_table()
 
         self.widget_states = {}
+
 
     def create_widgets(self):
         # Контейнер для первого ряда четырех кнопок
@@ -63,9 +70,9 @@ class TelegramCheckerUI:
 
         # Добавляем кнопки в контейнер
         tk.Label(top_buttons_inner_frame, text="Взаимодействие с эмуляторами и их конфигом (AVD):", font=self.header_font).pack(pady=5)
-        tk.Button(top_buttons_inner_frame, text="Показать\nсодержимое\nконфига AVD", font=self.custom_font, justify="center", command=self.show_config).pack(side="left", padx=5)
+        tk.Button(top_buttons_inner_frame, text="Информация о\nсозданных AVD", font=self.custom_font, justify="center", command=self.show_config).pack(side="left", padx=5)
         tk.Button(top_buttons_inner_frame, text="Удалить конфиг\n(Информация об AVD)", font=self.custom_font, justify="center", command=self.delete_config).pack(side="left", padx=5)
-        tk.Button(top_buttons_inner_frame, text="Сбросить флаг\nавторизации\nу всех AVD в конфиге", font=self.custom_font, justify="center", command=self.reset_all_authorizations).pack(side="left", padx=5)
+        tk.Button(top_buttons_inner_frame, text="Сбросить флаг авторизации\nу всех AVD в конфиге", font=self.custom_font, justify="center", command=self.reset_all_authorizations).pack(side="left", padx=5)
         tk.Button(top_buttons_inner_frame, text="Посмотреть список\nсозданных AVD", font=self.custom_font, justify="center", command=self.show_existing_avds_list).pack(side="left", padx=5)
         tk.Button(top_buttons_inner_frame, text="Удалить все AVD\n(Созданные AVD)", font=self.custom_font, justify="center", command=self.delete_all_avds).pack(side="left", padx=5)
         tk.Button(top_buttons_inner_frame, text="Перезапустить\nabv-server", font=self.custom_font, justify="center", command=self.restart_adb_server).pack(side="left", padx=5)
@@ -98,7 +105,6 @@ class TelegramCheckerUI:
         tk.Button(self.excel_frame, text="Открыть\nв проводнике", font=self.custom_font, command=lambda: self.open_in_explorer(self.source_excel_file_path)).pack(side="left", padx=5)
         self.excel_frame.pack(fill="x", padx=10, pady=5)
 
-
         # Поле для итогового файла
         tk.Label(self.root, text="Итоговый файл таблицы Excel:", font=self.header_font).pack(pady=1)
         tk.Entry(self.export_frame, textvariable=self.export_table_path, font=self.custom_font, width=50).pack(side="left", fill="x", expand=True, padx=5)
@@ -109,35 +115,57 @@ class TelegramCheckerUI:
         tk.Label(self.root, text="Содержимое таблицы Excel:", font=self.header_font).pack(pady=1)
         self.excel_treeview.pack(fill="both", expand=True, padx=10, pady=5)
 
-
-        # Добавляем контейнер для секции потоков и кнопок управления
+        # Контейнер для задания количества потоков, параметров AVD и кнопок управления
         control_frame = tk.Frame(self.root)
         control_frame.pack(fill="x", pady=5)
 
-        # Центрирование элементов в контейнере
+        # Центрирование всего блока control_frame
         control_inner_frame = tk.Frame(control_frame)
         control_inner_frame.pack(anchor="center")
 
-        # Поле для ввода количества потоков
-        tk.Label(control_inner_frame, text="Количество потоков:", font=self.header_font).pack(side="left", padx=10)
-        self.threads_entry = ttk.Entry(control_inner_frame, width=10, textvariable=self.num_threads)
-        self.threads_entry.pack(side="left", padx=5)
+        # Подконтейнер для ввода параметров AVD
+        avd_settings_frame = tk.Frame(control_inner_frame)
+        avd_settings_frame.pack(side="left", padx=10)
 
+        # Функция для создания поля ввода с подписью
+        def create_labeled_entry(parent, label_text, variable):
+            """Создает поле ввода с подписью над этим полем."""
+            frame = tk.Frame(parent)
+            frame.pack(side="left", padx=5)
+            tk.Label(frame, text=label_text, font=tk_font.Font(family="Calibri", size=11, weight="bold")).pack()
+            ttk.Entry(frame, textvariable=variable, width=8).pack()
+            return frame
+
+        # Поле для ввода количеств потоков и для ввода параметров AVD
+        create_labeled_entry(avd_settings_frame, "Количество\nпотоков:", self.num_threads)
+
+        # Кнопка сохранения параметров AVD в конфиг
+        tk.Button(avd_settings_frame, text="Сохранить\nкол-во потоков\nпо умолчанию", command=self.save_default_threads_amount).pack(side="left", padx=5)
+
+        create_labeled_entry(avd_settings_frame, "Кол-во ОЗУ\nна AVD (МБ):", self.ram_size)
+        create_labeled_entry(avd_settings_frame, "Тайм-аут\nготовности AVD (сек.):", self.avd_ready_timeout)
+        create_labeled_entry(avd_settings_frame, "Постоянная\nпамять (МБ):", self.disk_size)
+
+        # Кнопка сохранения параметров AVD в конфиг
+        tk.Button(avd_settings_frame, text="Сохранить\nпараметры AVD\nпо умолчанию", command=self.save_avd_settings).pack(side="right", padx=5)
+
+        # Подконтейнер для кнопок управления
+        buttons_frame = tk.Frame(control_inner_frame)
+        buttons_frame.pack(side="left", padx=20)
 
         # Кнопка запуска автоматизации
         self.start_button = tk.Button(
-            control_inner_frame,
-            text="Запустить автоматизацию\nэмуляторов",
+            buttons_frame,
+            text="Запустить\nавтоматизацию",
             command=self.start_automation,
             font=self.custom_font,
         )
         self.start_button.pack(side="left", padx=10)
 
-
         # Кнопка завершения программы с очисткой ресурсов во время ее выполнения
         self.close_program_button = tk.Button(
-            control_inner_frame,
-            text="Завершить программу\nи очистить ресурсы\nво время выполнения",
+            buttons_frame,
+            text="Завершить во время\nавтоматизации эмуляторов",
             command=lambda: self.app.terminate_program_during_automation(self),
             font=self.custom_font,
         )
@@ -145,12 +173,23 @@ class TelegramCheckerUI:
 
         # Кнопка принудительного завершения программы
         self.exit_button = tk.Button(
-            control_inner_frame,
+            buttons_frame,
             text="Завершить процесс\n(Принудительно)",
             command=self.exit_app,
             font=self.custom_font,
         )
         self.exit_button.pack(side="left", padx=10)
+
+
+    def save_default_threads_amount(self):
+        self.logic.save_threads_config(num_threads=self.num_threads.get())
+
+
+    def save_avd_settings(self):
+        self.logic.set_avd_property("ram_size", self.ram_size.get())
+        self.logic.set_avd_property("disk_size", self.disk_size.get())
+        self.logic.set_avd_property("emulator_ready_timeout", self.avd_ready_timeout.get())
+        logger.info("Настройки AVD сохранены.")
 
 
     def restart_adb_server(self):
@@ -240,6 +279,7 @@ class TelegramCheckerUI:
                 messagebox.showerror("Ошибка", f"Произошла ошибка: {e}")
             finally:
                 self.enable_all_widgets()
+                self.hide_loading_indicator()
                 if should_exit:
                     self.forced_to_exit_app()
 
@@ -247,6 +287,7 @@ class TelegramCheckerUI:
         self.disable_all_widgets()
 
         # Запускаем задачу в отдельном потоке
+        self.show_loading_indicator()
         thread = threading.Thread(target=task_wrapper, daemon=True)
         thread.start()
 
@@ -267,23 +308,22 @@ class TelegramCheckerUI:
         # Отключаем кнопку
         if self.close_program_button:
             self.close_program_button.config(state=tk.DISABLED)
-        self.logic.save_threads_config(num_threads=self.num_threads.get())
 
 
     def reset_all_authorizations(self):
         """
         Сбрасываем статус авторизации на False для всех AVD в конфигурации.
         """
-        if not os.path.exists(self.logic.config_file):
+        if not os.path.exists(self.logic.avd_list_info_config_file):
             messagebox.showinfo("Информация", "Конфигурационный файл не найден.")
             return
-        if messagebox.askyesno("Подтверждение", "Вы действительно хотите сбросить авторизацию для всех эмуляторов?"):
+        if messagebox.askyesno("Подтверждение", "Вы действительно хотите сбросить\nавторизацию для всех эмуляторов?"):
             self.logic.emulator_auth_config_manager.reset_all_authorizations()
 
 
     def delete_config(self):
         """Удаляет конфигурационный файл с подтверждением пользователя."""
-        if not os.path.exists(self.logic.config_file):
+        if not os.path.exists(self.logic.avd_list_info_config_file):
             messagebox.showinfo("Информация", "Конфигурационный файл не найден.")
             return
 
@@ -291,7 +331,7 @@ class TelegramCheckerUI:
         confirm = messagebox.askyesno("Удаление конфигурации", "Уверены, что хотите удалить текущий конфиг?")
         if confirm:
             try:
-                os.remove(self.logic.config_file)
+                os.remove(self.logic.avd_list_info_config_file)
                 messagebox.showinfo("Успех", "Конфигурационный файл успешно удален.")
             except Exception as e:
                 messagebox.showerror("Ошибка", f"Не удалось удалить конфигурационный файл: {e}")
@@ -311,7 +351,7 @@ class TelegramCheckerUI:
 
     def show_existing_avds_list(self):
         """ Открывает окно со списком созданных AVD. """
-        if self.logic.verify_environment_setup(use_logger=False):
+        if self.logic.verify_environment_setup(use_logger=True):
             avd_list = self.logic.emulator_manager.get_avd_list()
 
             if avd_list and not avd_list == []:
@@ -324,7 +364,7 @@ class TelegramCheckerUI:
     def delete_all_avds(self):
         """ Удаляет все существующие AVD через вызов метода в логике. """
 
-        if self.logic.verify_environment_setup(use_logger=False):
+        if self.logic.verify_environment_setup(use_logger=True):
             avd_list = self.logic.emulator_manager.get_avd_list()  # Получаем список AVD
 
             if not avd_list or avd_list == []:
@@ -344,7 +384,7 @@ class TelegramCheckerUI:
                         task=self.logic.delete_all_avds,
                         should_exit=False
                     )
-                    os.remove(self.logic.config_file)
+                    os.remove(self.logic.avd_list_info_config_file)
                     messagebox.showinfo("Успех", "Все AVD успешно удалены.\nТакже удален конфиг.")
                 except Exception as e:
                     logger.error(f"Ошибка при удалении AVD: {e}")
@@ -476,3 +516,86 @@ class TelegramCheckerUI:
         # Включаем все элементы интерфейса
         enable_children(self.root)
         logger.info("Все элементы интерфейса включены обратно.")
+
+
+    def show_loading_indicator(self):
+        """
+        Отображает индикатор загрузки поверх интерфейса.
+        """
+        if self.loading_overlay:
+            return  # Уже отображается
+
+        # Создаем overlay
+        self.loading_overlay = tk.Toplevel(self.root)
+
+        # Обновление размеров и позиции окна загрузки
+        def update_loading_overlay():
+            root_width = self.root.winfo_width()
+            root_height = self.root.winfo_height()
+
+            # Расчет размеров окна загрузки (15% от размеров root)
+            overlay_width = int(root_width * 0.15)
+            overlay_height = int(root_height * 0.15)
+
+            # Расчет позиции окна загрузки для центрирования
+            overlay_x = self.root.winfo_x() + (root_width - overlay_width) // 2
+            overlay_y = self.root.winfo_y() + (root_height - overlay_height) // 2
+
+            # Установка геометрии окна загрузки
+            self.loading_overlay.geometry(f"{overlay_width}x{overlay_height}+{overlay_x}+{overlay_y}")
+
+            # Запланировать обновление через 10 мс
+            self.loading_overlay.after(10, update_loading_overlay)
+
+        # Запуск обновления размеров и позиции
+        update_loading_overlay()
+
+        self.loading_overlay.overrideredirect(True)  # Убираем рамки окна
+        self.loading_overlay.wm_attributes("-topmost", True)
+        self.loading_overlay.attributes("-alpha", 0.5)  # Полупрозрачность
+        self.loading_overlay.configure(bg="gray")
+
+        # Закрытие окна загрузки при закрытии основного окна
+        self.root.protocol("WM_DELETE_WINDOW", lambda: (self.loading_overlay.destroy(), self.root.destroy()))
+
+        # Центрируем индикатор
+        loading_frame = tk.Frame(self.loading_overlay, bg="gray")
+        loading_frame.place(relx=0.5, rely=0.5, anchor="center")
+
+        # Кружок загрузки
+        self.loading_label = ttk.Label(loading_frame, text="⏳", font=("Arial", 40))
+        self.loading_label.pack()
+
+        # Надпись
+        self.loading_text = ttk.Label(loading_frame, text="Загрузка...", font=("Arial", 14))
+        self.loading_text.pack()
+
+        # Анимация
+        self.animate_loading_text()
+
+
+    def hide_loading_indicator(self):
+        """
+        Скрывает индикатор загрузки.
+        """
+        if self.loading_overlay:
+            self.loading_overlay.destroy()
+            self.loading_overlay = None
+
+
+    def animate_loading_text(self):
+        """
+        Анимация прозрачности текста.
+        """
+        if not self.loading_overlay:
+            return
+
+        try:
+            current_foreground = self.loading_text["foreground"] or "black"
+            current_alpha = self.loading_text.winfo_rgb(current_foreground)[0] / 65535
+            new_alpha = (current_alpha + 0.1) % 1.0  # Изменение прозрачности
+            new_color = f"#{int(new_alpha * 255):02x}{int(new_alpha * 255):02x}{int(new_alpha * 255):02x}"
+            self.loading_text.config(foreground=new_color)
+            self.root.after(100, self.animate_loading_text)
+        except Exception as e:
+            print(f"Ошибка в анимации: {e}")

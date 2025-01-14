@@ -159,8 +159,14 @@ class EmulatorManager:
         """
         Настраивает драйвер Appium для взаимодействия с эмулятором.
         """
+        thread_name = threading.current_thread().name
         android_driver_manager.start_appium_server()
-        android_driver_manager.ensure_adb_connection()
+
+        while not android_driver_manager.is_appium_server_running(android_driver_manager.appium_server_url):
+            logger.error(f"[{thread_name}] [{avd_name}] Не удалось убедится в том, что Appium Server запущен (пробуем еще раз, через 5 секунд).")
+            time.sleep(5)
+            android_driver_manager.start_appium_server()
+
         driver = android_driver_manager.create_driver(
             avd_name=avd_name,
             emulator_port=emulator_port,
@@ -264,12 +270,19 @@ class EmulatorManager:
 
             # Чтение потоков в реальном времени
             def read_stream(stream, log_file, log_func):
-                for line in stream:
-                    line = line.strip()
-                    if line:
-                        log_func(f"[{thread_name}] {line}")
-                        log_file.write(line + "\n")
-                        log_file.flush()
+                try:
+                    for line in stream:
+                        line = line.strip()
+                        if line:
+                            log_func(f"[{thread_name}] {line}")
+                            try:
+                                log_file.write(line + "\n")
+                                log_file.flush()
+                            except ValueError as e:
+                                log_func(f"[{thread_name}] Ошибка записи в файл: {e}")
+                                break  # Выход из цикла, если файл закрыт
+                except Exception as e:
+                    log_func(f"[{thread_name}] Необработанная ошибка: {e}")
 
             stdout_thread = threading.Thread(
                 target=read_stream,
@@ -281,6 +294,7 @@ class EmulatorManager:
                 args=(process.stderr, stderr_log, logger.error),
                 daemon=True
             )
+
             stdout_thread.start()
             stderr_thread.start()
 

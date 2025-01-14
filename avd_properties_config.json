@@ -1,0 +1,5 @@
+{
+    "ram_size": 1024,
+    "disk_size": 1024,
+    "emulator_ready_timeout": 1200
+}

@@ -4,7 +4,6 @@ import os
 
 import pandas as pd
 
-from EmulatorAuthConfigManager import EmulatorAuthConfigManager
 from EmulatorManager import EmulatorManager
 from AndroidToolManager import AndroidToolManager
 
@@ -12,28 +11,35 @@ from logger_config import Logger
 logger = Logger.get_logger(__name__)
 
 
-
 class TelegramCheckerUILogic:
-    THREADS_AMOUNT_CONFIG_FILE = "threads_config.json"  # Имя файла для хранения параметров
+    DEFAULT_THREADS_AMOUNT_CONFIG = {
+        "threads_amount": 1,  # Количество потоков по умолчанию
+    }
+    THREADS_AMOUNT_CONFIG_FILE = "threads_amount_config.json"  # Имя файла для хранения количества потоков
+
+    DEFAULT_AVD_CONFIG = {
+        "ram_size": 1024,  # Размер ОЗУ по умолчанию в МБ
+        "disk_size": 1024,  # Размер постоянной памяти по умолчанию в МБ
+        "emulator_ready_timeout": 1200,  # Время ожидания готовности эмулятора в секундах
+    }
+    AVD_PROPERTIES_CONFIG_FILE = "avd_properties_config.json"  # Имя файла для хранения параметров AVD
 
     def __init__(
             self,
-            config_file,
-            default_excel_dir: str,
-            emulator_auth_config_manager: EmulatorAuthConfigManager,
-            emulator_manager: EmulatorManager,
+            avd_list_info_config_file,
             base_project_dir,
+            default_excel_dir: str,
+            emulator_manager: EmulatorManager,
     ):
-        self.config_file = config_file
+        self.avd_list_info_config_file = avd_list_info_config_file
+        self.default_avd_name_template = "AVD_DEVICE"
+
+        self.avd_config = self.load_avd_properties_config()
 
         self.emulator_manager = emulator_manager
         self.android_tool_manager = AndroidToolManager(base_project_dir=base_project_dir)
 
         self.default_excel_dir = default_excel_dir
-        self.emulator_auth_config_manager = emulator_auth_config_manager
-
-        # Список имен AVD, который будет заполняться через интерфейс
-        self.avd_names = []
 
 
     def restart_adb_server(self):
@@ -63,14 +69,15 @@ class TelegramCheckerUILogic:
     def clear_tools_files_cache(self):
         self.android_tool_manager.clear_tools_files_cache()
 
+
     def load_config_file_content(self):
-        """Загружает содержимое конфигурационного файла для визуализации."""
-        if not os.path.exists(self.config_file):
-            logger.warning(f"Конфигурационный файл {self.config_file} не найден.")
+        """Загружает содержимое общего для всех AVD конфигурационного файла для визуализации."""
+        if not os.path.exists(self.avd_list_info_config_file):
+            logger.warning(f"Конфигурационный файл {self.avd_list_info_config_file} не найден.")
             return {}
 
         try:
-            with open(self.config_file, 'r', encoding='utf-8') as f:
+            with open(self.avd_list_info_config_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except Exception as e:
             logger.error(f"Ошибка при чтении конфигурационного файла: {e}")
@@ -111,6 +118,7 @@ class TelegramCheckerUILogic:
         except Exception as e:
             raise ValueError(f"Ошибка загрузки Excel: {e}")
 
+
     @staticmethod
     def get_column_widths(df):
         """
@@ -125,6 +133,7 @@ class TelegramCheckerUILogic:
             max_width = max(len(value) for value in values)
             column_widths[col] = max_width
         return column_widths
+
 
     # noinspection PyTypeChecker
     def save_threads_config(self, num_threads):
@@ -145,16 +154,71 @@ class TelegramCheckerUILogic:
                 with open(self.THREADS_AMOUNT_CONFIG_FILE, "r") as config_file:
                     content = config_file.read().strip()
                     if not content:  # Если файл пуст
-                        logger.warning(f"Файл {self.THREADS_AMOUNT_CONFIG_FILE} пуст. Устанавливаются значения по умолчанию.")
+                        logger.warning(f"Файл {self.THREADS_AMOUNT_CONFIG_FILE} пуст.")
                         return {"num_threads": 1}
                     logger.info(f"Из конфига {self.THREADS_AMOUNT_CONFIG_FILE} извлечено дефолтное кол-во потоков: {json.loads(content).get("num_threads", 1)}.")
                     return json.loads(content)
             except (json.JSONDecodeError, ValueError) as e:
                 logger.error(f"Ошибка при чтении JSON из {self.THREADS_AMOUNT_CONFIG_FILE}: {e}")
-                return {"num_threads": 1}  # Возвращаем значение по умолчанию
         else:
-            logger.warning(f"Файл {self.THREADS_AMOUNT_CONFIG_FILE} не найден. Устанавливаются значения по умолчанию.")
-            return {"num_threads": 1}
+            logger.warning(f"Файл {self.THREADS_AMOUNT_CONFIG_FILE} не найден.")
+
+        logger.info(f"Используются значения по умолчанию: {self.DEFAULT_THREADS_AMOUNT_CONFIG}")
+        return self.DEFAULT_THREADS_AMOUNT_CONFIG
+
+
+    def load_avd_properties_config(self):
+        """
+        Загружает конфиг AVD. Если файл отсутствует, возвращает значения по умолчанию.
+        """
+        if os.path.exists(self.AVD_PROPERTIES_CONFIG_FILE):
+            try:
+                with open(self.AVD_PROPERTIES_CONFIG_FILE, "r", encoding="utf-8") as f:
+                    config = json.load(f)
+                    # Логирование загруженных параметров
+                    logger.info(f"Загружены параметры эмуляторов из файла {self.AVD_PROPERTIES_CONFIG_FILE}:")
+                    for key, value in config.items():
+                        logger.info(f"{key}: {value}")
+
+                    return {**self.DEFAULT_AVD_CONFIG, **config}
+            except (json.JSONDecodeError, IOError) as e:
+                logger.error(f"Ошибка при чтении конфигурационного файла {self.AVD_PROPERTIES_CONFIG_FILE}: {e}")
+        else:
+            logger.warning(f"Файл {self.AVD_PROPERTIES_CONFIG_FILE} не найден.")
+        # Логирование использования значений по умолчанию
+        logger.info(f"Используются значения по умолчанию: {self.DEFAULT_AVD_CONFIG}")
+        return self.DEFAULT_AVD_CONFIG
+
+
+    # noinspection PyTypeChecker
+    def save_avd_properties_config(self, config):
+        """
+        Сохраняет конфиг AVD в файл.
+        :param config: Словарь с параметрами конфигурации
+        """
+        try:
+            with open(self.AVD_PROPERTIES_CONFIG_FILE, "w", encoding="utf-8") as f:
+                json.dump(config, f, indent=4)
+        except IOError as e:
+            logger.error(f"Ошибка при сохранении конфигурационного файла: {e}")
+
+
+    def get_avd_property(self, avd_property_name):
+        """
+        Возвращает значение конкретного параметра AVD.
+        :param avd_property_name: Имя параметра
+        """
+        return self.avd_config.get(avd_property_name, self.DEFAULT_AVD_CONFIG.get(avd_property_name))
+
+
+    def set_avd_property(self, avd_property_name, value):
+        """
+        Устанавливает значение параметра и сохраняет конфиг.
+        :param avd_property_name: Имя параметра
+        :param value: Значение параметра
+        """
+        self.avd_config[avd_property_name] = value
+        self.save_avd_properties_config(self.avd_config)
 
 
     def delete_all_avds(self):

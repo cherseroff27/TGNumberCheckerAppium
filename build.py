@@ -20,9 +20,13 @@ def find_tcl_tk_paths():
 
 def build_exe():
     """
-    Сборка exe с помощью PyInstaller, добавляя пути к Tcl/Tk из глобальной установки.
+    Сборка exe с помощью PyInstaller, добавляя пути к Tcl/Tk из глобальной установки и иконку приложения.
     """
     tcl_path, tk_path = find_tcl_tk_paths()
+
+    icon_path = "icon.ico"
+    if not os.path.exists(icon_path):
+        raise FileNotFoundError(f"Файл иконки {icon_path} не найден.")
 
     pyinstaller_command = [
         "pyinstaller",
@@ -32,6 +36,7 @@ def build_exe():
         "--name", "TGNumberCheckerAutomation",
         "--add-data", f"{tcl_path};lib\\tcl8.6",
         "--add-data", f"{tk_path};lib\\tk8.6",
+        "--icon", icon_path,
         "TGAppiumEmulatorAutomationApp.py",
     ]
 

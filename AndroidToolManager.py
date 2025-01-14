@@ -37,12 +37,13 @@ class AndroidToolManager:
         self.state = self.load_state()
 
 
-    def clear_state_file(self):
+    def clear_state_file(self, use_logger:bool=True):
         """
         Полностью очищает файл состояния, удаляя все данные.
         """
         if os.path.exists(self.state_file_path):
-            logger.info(f"Очищаю файл состояния: {self.state_file_path}")
+            if use_logger:
+                logger.info(f"Очищаю файл состояния: {self.state_file_path}")
             with open(self.state_file_path, "w") as file:
                 # Можно оставить пустой объект JSON или просто пустой файл
                 file.write("{}")  # Записываем пустой JSON объект
@@ -389,17 +390,21 @@ class AndroidToolManager:
         Удаляет все пути, добавленные этим скриптом, из переменных среды,
         и удаляет конфигурационный файл с состоянием установленных компонентов.
         """
-        java_home = os.environ.get("JAVA_HOME")
-        if not java_home:
-            self.clear_state_file()
-            logger.warning("Переменная среды ANDROID_HOME не установлена.")
-            return
+        logger.info("Проверка установленной среды...")
 
+        java_home = os.environ.get("JAVA_HOME")
         android_home = os.environ.get("ANDROID_HOME")
-        if not android_home:
-            self.clear_state_file()
-            logger.warning("Переменная среды ANDROID_HOME не установлена.")
-            return
+
+        env_vars_to_check = {
+            "JAVA_HOME": java_home,
+            "ANDROID_HOME": android_home
+        }
+        for var_name, var_value in env_vars_to_check.items():
+            if not var_value:  # Проверяем, установлена ли переменная
+                self.clear_state_file()
+                logger.warning(f"Переменная среды {var_name} не установлена.\n"
+                               f"Возможно, вы не установили компонент {var_name} и не добавили его в переменные среды!")
+                return
 
         self.clear_state_file()
 
@@ -454,18 +459,15 @@ class AndroidToolManager:
             logger.info("Проверка установленной среды...")
 
         java_home = os.environ.get("JAVA_HOME")
-        if not java_home:
-            self.clear_state_file()
-            if use_logger:
-                logger.warning("Переменная среды ANDROID_HOME не установлена.")
-            return
-
         android_home = os.environ.get("ANDROID_HOME")
-        if not android_home:
-            self.clear_state_file()
-            if use_logger:
-                logger.warning("Переменная среды ANDROID_HOME не установлена.")
-            return
+
+        env_vars_to_check = {"JAVA_HOME": java_home, "ANDROID_HOME": android_home}
+        for var_name, var_value in env_vars_to_check.items():
+            if not var_value:
+                if use_logger:
+                    logger.warning(f"Переменная среды {var_name} не установлена.\n"
+                                   f"Возможно вы не установили компонент {var_name} и не записали его в переменные среды!")
+                return
 
         # Проверяем пути, которые должны существовать
         paths_to_check = {
@@ -482,10 +484,10 @@ class AndroidToolManager:
         for description, path in paths_to_check.items():
             if os.path.exists(path):
                 if use_logger:
-                    logger.info(f"{description} найден: {path}")
+                    logger.info(f"Файлы {description} найдены по пути: {path}")
             else:
                 if use_logger:
-                    logger.warning(f"{description} отсутствует: {path}")
+                    logger.warning(f"Файлы {description} отсутствуют по пути: {path}")
                 all_paths_exist = False
 
 
@@ -521,10 +523,10 @@ class AndroidToolManager:
         for path in paths_to_check_in_path:
             if any(os.path.abspath(path) == os.path.abspath(p) for p in path_dirs):
                 if use_logger:
-                    logger.info(f"Путь {path} присутствует в PATH.")
+                    logger.info(f"Путь  присутствует в PATH: {path}")
             else:
                 if use_logger:
-                    logger.warning(f"Путь {path} отсутствует в PATH.")
+                    logger.warning(f"Путь отсутствует в PATH: {path}")
                 all_paths_in_path = False
 
         # Итоговая проверка
@@ -533,7 +535,7 @@ class AndroidToolManager:
                 logger.info("Все необходимые компоненты установлены и настроены корректно.")
             return True
         else:
-            logger.error("Обнаружены проблемы с установкой и настройкой среды. Проверьте предупреждения выше.")
+            logger.error("Обнаружены проблемы с установкой и настройкой среды. Проверьте предупреждения выше.\nВозможно вы не установили sdk_packages и не записали их в переменные среды!")
             return False
 
 
