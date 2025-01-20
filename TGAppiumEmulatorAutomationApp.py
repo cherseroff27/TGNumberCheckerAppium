@@ -1,8 +1,8 @@
-import multiprocessing
 import re
 import os
 import sys
 import time
+import multiprocessing
 
 import pandas as pd
 
@@ -20,6 +20,10 @@ from ExcelDataBuilder import ExcelDataBuilder
 from EmulatorAuthConfigManager import EmulatorAuthConfigManager
 from TelegramApkVersionManager import TelegramApkVersionManager
 from EmulatorAuthWindowManager import EmulatorAuthWindowManager
+
+from NodeJsInstaller import NodeJsInstaller
+from AndroidToolManager import AndroidToolManager
+from AppiumInstaller import AppiumInstaller
 
 from EmulatorManager import EmulatorManager
 from AndroidDriverManager import AndroidDriverManager
@@ -41,9 +45,14 @@ else:  # Программа запущена как скрипт .py
 
 DEFAULT_EXCEL_TABLE_DIR = os.path.join(BASE_PROJECT_DIR, "excel_tables_dir")
 DEFAULT_APK_SAVE_DIR = os.path.join(BASE_PROJECT_DIR, "telegram_apk")
+DEFAULT_TOOLS_DIR = os.path.join(BASE_PROJECT_DIR, "tools")
+DEFAULT_TEMP_FILES_DIR = os.path.join(DEFAULT_TOOLS_DIR, "TEMP_FILES")
+DEFAULT_NODE_DIR = os.path.join(DEFAULT_TOOLS_DIR, "NODE_DIR")
+DEFAULT_SDK_DIR = os.path.join(DEFAULT_TOOLS_DIR, "ANDROID_HOME")
+DEFAULT_JAVA_DIR = os.path.join(DEFAULT_TOOLS_DIR, "JAVA_HOME")
+
 APK_URL = "https://telegram.org/dl/android/apk"
 APK_NAME = "Telegram_latest_version"
-
 
 class ThreadSafeExcelProcessor:
     def __init__(self, input_path, output_path):
@@ -126,28 +135,55 @@ class ThreadSafeExcelProcessor:
             logger.info(f"[{thread_name}] Номер {normalized_row_number} добавлен в экспортную таблицу.")
 
 class TGAppiumEmulatorAutomationApp:
+    required_directories = [
+        DEFAULT_EXCEL_TABLE_DIR,
+        DEFAULT_APK_SAVE_DIR,
+        DEFAULT_TOOLS_DIR,
+        DEFAULT_TEMP_FILES_DIR,
+        DEFAULT_NODE_DIR,
+        DEFAULT_SDK_DIR,
+        DEFAULT_JAVA_DIR
+    ]
+    for directory in required_directories:
+        os.makedirs(directory, exist_ok=True)
+
     def __init__(self):
         self.terminate_flag = Event()
         self.root = tk.Tk()
 
-        if not os.path.exists(DEFAULT_APK_SAVE_DIR):
-            os.makedirs(DEFAULT_APK_SAVE_DIR, exist_ok=True)
-        if not os.path.exists(DEFAULT_EXCEL_TABLE_DIR):
-            os.makedirs(DEFAULT_EXCEL_TABLE_DIR, exist_ok=True)
+        self.android_tool_manager = AndroidToolManager(
+            tools_dir=DEFAULT_TOOLS_DIR,
+            temp_files_dir=DEFAULT_TEMP_FILES_DIR,
+            sdk_dir=DEFAULT_SDK_DIR,
+            java_dir=DEFAULT_JAVA_DIR,
+            base_project_dir=BASE_PROJECT_DIR,
+        )
 
-        self.emulator_auth_window_manager = EmulatorAuthWindowManager(self.root)
+        self.node_js_installer = NodeJsInstaller(
+            node_dir=DEFAULT_NODE_DIR,
+            temp_files_dir=DEFAULT_TEMP_FILES_DIR,
+            base_project_dir=BASE_PROJECT_DIR,
+        )
+
+        self.appium_installer = AppiumInstaller(
+            node_dir=DEFAULT_NODE_DIR,
+        )
 
         self.emulator_manager = EmulatorManager()
-
+        self.emulator_auth_window_manager = EmulatorAuthWindowManager(self.root)
         self.emulator_auth_config_manager = EmulatorAuthConfigManager()
+
         self.logic = TelegramCheckerUILogic(
-            base_project_dir=BASE_PROJECT_DIR,
-            emulator_manager= self.emulator_manager,
+            temp_files_dir=DEFAULT_TEMP_FILES_DIR,
             default_excel_dir=DEFAULT_EXCEL_TABLE_DIR,
             avd_list_info_config_file=EmulatorAuthConfigManager.CONFIG_FILE,
+            emulator_manager= self.emulator_manager,
+            node_js_installer=self.node_js_installer,
+            android_tool_manager=self.android_tool_manager,
+            appium_installer=self.appium_installer,
         )
+
         self.ui = TelegramCheckerUI(self.root, self.logic, self)
-        print(sys.executable)
         self.ui.refresh_excel_table()
 
 

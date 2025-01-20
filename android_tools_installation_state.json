@@ -1,0 +1,10 @@
+{
+    "cmdline_tools_path_key": "C:\\Users\\cherseroff\\PycharmProjects\\TGNumberCheckerAppium\\tools\\ANDROID_HOME\\cmdline-tools\\latest\\bin",
+    "java_installed_path_key": "C:\\Users\\cherseroff\\PycharmProjects\\TGNumberCheckerAppium\\tools\\JAVA_HOME",
+    "sdk_installed_path_key": "C:\\Users\\cherseroff\\PycharmProjects\\TGNumberCheckerAppium\\tools\\ANDROID_HOME",
+    "sdkmanager_installed_path_key": "C:\\Users\\cherseroff\\PycharmProjects\\TGNumberCheckerAppium\\tools\\ANDROID_HOME\\cmdline-tools\\latest\\bin\\sdkmanager.bat",
+    "platform_tools_installed_path_key": "C:\\Users\\cherseroff\\PycharmProjects\\TGNumberCheckerAppium\\tools\\ANDROID_HOME\\platform-tools",
+    "emulator_package_installed_path_key": "C:\\Users\\cherseroff\\PycharmProjects\\TGNumberCheckerAppium\\tools\\ANDROID_HOME\\emulator",
+    "build_tools_installed_path_key": "C:\\Users\\cherseroff\\PycharmProjects\\TGNumberCheckerAppium\\tools\\ANDROID_HOME\\build-tools\\34.0.0",
+    "hypervisor_driver_installed_path_key": "C:\\Users\\cherseroff\\PycharmProjects\\TGNumberCheckerAppium\\tools\\ANDROID_HOME\\extras\\intel"
+}

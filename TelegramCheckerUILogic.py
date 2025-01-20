@@ -6,6 +6,9 @@ import pandas as pd
 
 from EmulatorManager import EmulatorManager
 from AndroidToolManager import AndroidToolManager
+from AppiumInstaller import AppiumInstaller
+from NodeJsInstaller import NodeJsInstaller
+from PackageManager import PackageManager
 
 from logger_config import Logger
 logger = Logger.get_logger(__name__)
@@ -26,48 +29,54 @@ class TelegramCheckerUILogic:
 
     def __init__(
             self,
-            avd_list_info_config_file,
-            base_project_dir,
+            temp_files_dir: str,
             default_excel_dir: str,
+            avd_list_info_config_file,
             emulator_manager: EmulatorManager,
+            appium_installer: AppiumInstaller,
+            node_js_installer: NodeJsInstaller,
+            android_tool_manager: AndroidToolManager,
     ):
-        self.avd_list_info_config_file = avd_list_info_config_file
-        self.default_avd_name_template = "AVD_DEVICE"
+        self.default_excel_dir = default_excel_dir
+        self.temp_files_dir = temp_files_dir
 
         self.avd_config = self.load_avd_properties_config()
+        self.avd_list_info_config_file = avd_list_info_config_file
+
+        self.appium_installer = appium_installer
+        self.node_js_installer = node_js_installer
+        self.android_tool_manager = android_tool_manager
 
         self.emulator_manager = emulator_manager
-        self.android_tool_manager = AndroidToolManager(base_project_dir=base_project_dir)
 
-        self.default_excel_dir = default_excel_dir
+
+    def verify_environment_setup(self):
+        self.node_js_installer.verify_node_js_environment_setup()
+        self.android_tool_manager.verify_sdk_tools_environment_setup()
+
+
+    def download_and_setup_java_sdk_and_android_sdk_tools(self):
+        self.android_tool_manager.setup_all()
+
+
+    def download_and_setup_node_js(self):
+        self.node_js_installer.setup_all()
+
+
+    def setup_appium_and_uiautomator2(self):
+        self.appium_installer.setup_appium_and_uiautomator2()
+
+
+    def check_if_is_node_installed(self):
+        return self.node_js_installer.fetch_node_version()
 
 
     def restart_adb_server(self):
         self.android_tool_manager.restart_adb_server()
 
 
-    def setup_java_and_sdk(self):
-        self.android_tool_manager.setup_java_and_sdk()
-
-
-    def setup_sdk_packages(self):
-        self.android_tool_manager.setup_sdk_packages()
-
-
-    def setup_build_tools_and_emulator(self):
-        self.android_tool_manager.setup_build_tools_and_emulator()
-
-
-    def remove_variables_and_paths(self):
-        self.android_tool_manager.remove_paths_from_system()
-
-
-    def verify_environment_setup(self, use_logger:bool=True):
-        return self.android_tool_manager.verify_environment_setup(use_logger=use_logger)
-
-
     def clear_tools_files_cache(self):
-        self.android_tool_manager.clear_tools_files_cache()
+        PackageManager.clear_tools_files_cache(self.temp_files_dir)
 
 
     def load_config_file_content(self):

@@ -1,25 +1,27 @@
-import sys
+import ctypes
+from logger_config import Logger
+logger = Logger.get_logger(__name__)
+
+def notify_environment_change():
+    """Отправляет сообщение WM_SETTINGCHANGE для немедленного применения изменений переменных среды."""
+    HWND_BROADCAST = 0xFFFF
+    WM_SETTINGCHANGE = 0x1A
+
+    result = ctypes.windll.user32.SendMessageTimeoutA(
+        HWND_BROADCAST,
+        WM_SETTINGCHANGE,
+        0,
+        ctypes.cast(ctypes.c_char_p(b"Environment"), ctypes.POINTER(ctypes.c_char)),
+        0,
+        5000,  # Таймаут 5 секунд
+        None
+    )
+    if result == 0:
+        logger.warning(
+            "Не удалось отправить сообщение WM_SETTINGCHANGE. Переменные среды могут примениться с задержкой.")
+    else:
+        logger.info("Изменения переменных среды применены немедленно.")
 
 
-def is_virtualization_enabled():
-    """
-    Проверяет, включена ли виртуализация на уровне процессора (Intel VT-x/AMD-V).
-    """
-    try:
-        # Используем ctypes для вызова CPUID на Windows
-        if sys.platform == "win32":
-            import ctypes
-            kernel32 = ctypes.windll.kernel32
-            system_info = ctypes.create_string_buffer(64)
-            kernel32.GetSystemInfo(ctypes.byref(system_info))
-            return "Virtualization" in system_info.raw.decode(errors="ignore")
-        else:
-            # Для других ОС можно реализовать дополнительные проверки
-            return True
-    except Exception as e:
-        print(f"Ошибка проверки виртуализации: {e}")
-        return False
 
-
-if is_virtualization_enabled():
-    print(123)
+notify_environment_change()

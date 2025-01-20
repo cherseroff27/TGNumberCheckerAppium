@@ -7,6 +7,8 @@ import tkinter as tk
 import tkinter.font as tk_font
 from tkinter import filedialog, ttk, messagebox
 
+from LocalVariablesManager import LocalVariablesManager
+
 from logger_config import Logger
 logger = Logger.get_logger(__name__)
 
@@ -18,9 +20,10 @@ class TelegramCheckerUI:
         self.logic = logic
         self.root.title("Telegram Number Checker")
         self.root.geometry("1200x900")
+        self.loading_indicator = LoadingIndicator(self.root)
 
         self.header_font = tk_font.Font(family="Helvetica", size=11, weight="bold")
-        self.custom_font = tk_font.Font(family="Calibri", size=11, weight="normal")
+        self.custom_font = tk_font.Font(family="Calibri", size=10, weight="normal")
 
         self.saved_config = self.logic.load_threads_config()
         self.num_threads = tk.IntVar(value=self.saved_config.get("num_threads", 1))
@@ -28,10 +31,6 @@ class TelegramCheckerUI:
         self.ram_size = tk.IntVar(value=logic.get_avd_property("ram_size"))
         self.disk_size = tk.IntVar(value=logic.get_avd_property("disk_size"))
         self.avd_ready_timeout = tk.IntVar(value=logic.get_avd_property("emulator_ready_timeout"))
-
-        # Исходные данные по умолчанию
-        self.default_avd_name_template = tk.StringVar(value=logic.default_avd_name_template)
-        self.default_avd_name_template_entry = ttk.Entry(self.root, width=10, textvariable=self.default_avd_name_template)
 
         # Интерфейсные переменные
         latest_excel_file = logic.get_latest_excel_file()
@@ -45,11 +44,9 @@ class TelegramCheckerUI:
         self.export_frame = ttk.Frame(self.root)
         self.excel_treeview = ttk.Treeview(columns=[], show="headings", height=5)
 
-
         self.start_button = None
         self.close_program_button = None
         self.exit_button = None
-        self.loading_overlay = None
 
         # Создаем виджеты
         self.create_widgets()
@@ -58,40 +55,39 @@ class TelegramCheckerUI:
 
         self.widget_states = {}
 
+        self.logic.download_and_setup_java_sdk_and_android_sdk_tools()
+        self.logic.download_and_setup_node_js()
+
 
     def create_widgets(self):
         # Контейнер для первого ряда четырех кнопок
         top_buttons_frame = tk.Frame(self.root)
         top_buttons_frame.pack(fill="x", pady=5)
 
-        # Центрирование кнопок в контейнере первого ряда четырех кнопок
-        top_buttons_inner_frame = tk.Frame(top_buttons_frame)
-        top_buttons_inner_frame.pack(anchor="center")
+        # Центрирование кнопок в контейнере первого ряда кнопок
+        first_level_top_buttons_inner_frame = tk.Frame(top_buttons_frame)
+        first_level_top_buttons_inner_frame.pack(anchor="center")
 
         # Добавляем кнопки в контейнер
-        tk.Label(top_buttons_inner_frame, text="Взаимодействие с эмуляторами и их конфигом (AVD):", font=self.header_font).pack(pady=5)
-        tk.Button(top_buttons_inner_frame, text="Информация о\nсозданных AVD", font=self.custom_font, justify="center", command=self.show_config).pack(side="left", padx=5)
-        tk.Button(top_buttons_inner_frame, text="Удалить конфиг\n(Информация об AVD)", font=self.custom_font, justify="center", command=self.delete_config).pack(side="left", padx=5)
-        tk.Button(top_buttons_inner_frame, text="Сбросить флаг авторизации\nу всех AVD в конфиге", font=self.custom_font, justify="center", command=self.reset_all_authorizations).pack(side="left", padx=5)
-        tk.Button(top_buttons_inner_frame, text="Посмотреть список\nсозданных AVD", font=self.custom_font, justify="center", command=self.show_existing_avds_list).pack(side="left", padx=5)
-        tk.Button(top_buttons_inner_frame, text="Удалить все AVD\n(Созданные AVD)", font=self.custom_font, justify="center", command=self.delete_all_avds).pack(side="left", padx=5)
-        tk.Button(top_buttons_inner_frame, text="Перезапустить\nabv-server", font=self.custom_font, justify="center", command=self.restart_adb_server).pack(side="left", padx=5)
+        tk.Label(first_level_top_buttons_inner_frame, text="Взаимодействие с эмуляторами и их конфигом (AVD):", font=self.header_font).pack(pady=5)
+        tk.Button(first_level_top_buttons_inner_frame, text="Информация о\nсозданных AVD", font=self.custom_font, justify="center", command=self.show_config).pack(side="left", padx=5)
+        tk.Button(first_level_top_buttons_inner_frame, text="Удалить конфиг\n(Информация об AVD)", font=self.custom_font, justify="center", command=self.delete_config).pack(side="left", padx=5)
+        tk.Button(first_level_top_buttons_inner_frame, text="Сбросить флаг авторизации\nу всех AVD в конфиге", font=self.custom_font, justify="center", command=self.reset_all_authorizations).pack(side="left", padx=5)
+        tk.Button(first_level_top_buttons_inner_frame, text="Посмотреть список\nсозданных AVD", font=self.custom_font, justify="center", command=self.show_existing_avds_list).pack(side="left", padx=5)
+        tk.Button(first_level_top_buttons_inner_frame, text="Удалить все AVD\n(Созданные AVD)", font=self.custom_font, justify="center", command=self.delete_all_avds).pack(side="left", padx=5)
+        tk.Button(first_level_top_buttons_inner_frame, text="Перезапустить\nabv-server", font=self.custom_font, justify="center", command=self.restart_adb_server).pack(side="left", padx=5)
 
-        # Контейнер для второго ряда четырех кнопок
-        under_top_buttons_frame = tk.Frame(self.root)
-        under_top_buttons_frame.pack(fill="x", pady=5)
+        # Центрирование кнопок в контейнере второго ряда кнопок
+        second_level_top_buttons_inner_frame = tk.Frame(top_buttons_frame)
+        second_level_top_buttons_inner_frame.pack(anchor="center")
 
-        # Центрирование кнопок в контейнере второго ряда четырех кнопок
-        under_top_buttons_frame = tk.Frame(top_buttons_frame)
-        under_top_buttons_frame.pack(anchor="center")
-
-        tk.Label(under_top_buttons_frame, text="Установка/удаление инструментов SDK/JDK их системных переменных и конфига:", font=self.header_font).pack(pady=5)
-        tk.Button(under_top_buttons_frame, text="Установить и записать\nJAVA_HOME,\nANDROID_HOME\nв переменные среды", font=self.custom_font, justify="center", command=self.setup_java_and_sdk).pack(side="left", padx=5)
-        tk.Button(under_top_buttons_frame, text="Установить sdk_packages\n(adb, emulator,\naapt, build-tools,\nIntel XAML, Hypervisor Driver)", font=self.custom_font, justify="center", command=self.setup_sdk_packages).pack(side="left", padx=5)
-        tk.Button(under_top_buttons_frame, text="Записать sdk_packages\n(adb, emulator,\naapt, build-tools)\nв переменные среды", font=self.custom_font, justify="center", command=self.setup_build_tools_and_emulator).pack(side="left", padx=5)
-        tk.Button(under_top_buttons_frame, text="Удалить конфиг переменных,\n переменные среды:\nинструменты SDK, Java JDK",font=self.custom_font, justify="center", command=self.remove_variables_and_paths).pack(side="left", padx=5)
-        tk.Button(under_top_buttons_frame, text="Проверить наличие\n переменных среды:\nинструменты SDK, Java JDK",font=self.custom_font, justify="center", command=self.verify_environment_setup).pack(side="left", padx=5)
-        tk.Button(under_top_buttons_frame, text="Очистить папку\nTEMP_FILES\n(кэш файлов\ncmdline-tools и jdk)",font=self.custom_font, justify="center", command=self.clear_tools_files_cache).pack(side="left", padx=5)
+        tk.Label(second_level_top_buttons_inner_frame, text="Установка/удаление инструментов SDK/JDK их системных переменных и конфига\nУстановка Node JS и Appium Server:", font=self.header_font).pack(pady=5)
+        tk.Button(second_level_top_buttons_inner_frame, text="Установить\nкомпоненты\nSDK/JDK", font=self.custom_font, justify="center", command=self.download_and_setup_java_sdk_and_android_sdk_tools).pack(side="left", padx=5)
+        tk.Button(second_level_top_buttons_inner_frame, text="Скачать, установить\nNODE JS, добавить в\nпеременные среды", font=self.custom_font, justify="center", command=self.download_and_setup_node_js).pack(side="left", padx=5)
+        tk.Button(second_level_top_buttons_inner_frame, text="Проверить\nустановлен ли\nNODE JS", font=self.custom_font, justify="center", command=self.check_if_is_node_installed).pack(side="left", padx=5)
+        tk.Button(second_level_top_buttons_inner_frame, text="Вывести в лог\ncписок локальных\nпеременных среды", font=self.custom_font, justify="center", command=self.get_all_local_environ_variables).pack(side="left", padx=5)
+        tk.Button(second_level_top_buttons_inner_frame, text="Установить\nAppium,\nUIAutomator2", font=self.custom_font, justify="center", command=self.setup_appium_and_uiautomator2).pack(side="left", padx=5)
+        tk.Button(second_level_top_buttons_inner_frame, text="Очистить папку\nTEMP_FILES\n(кэш файлов\ncmdline-tools\nNode.js и jdk)",font=self.custom_font, justify="center", command=self.clear_tools_files_cache).pack(side="left", padx=5)
 
         # Файл Excel
         tk.Label(self.root, text="Файл таблицы Excel:", font=self.header_font).pack(pady=1)
@@ -181,6 +177,48 @@ class TelegramCheckerUI:
         self.exit_button.pack(side="left", padx=10)
 
 
+    def get_all_local_environ_variables(self):
+        self.run_task_in_thread(
+            task=LocalVariablesManager.get_all_local_env_vars,
+            should_exit=False
+        )
+
+    def setup_appium_and_uiautomator2(self):
+        """
+        Скачиваем, распаковываем архив с бинарниками и библиотеками Node.js, добавляем в PATH.
+        """
+        self.run_task_in_thread(
+            task=self.logic.setup_appium_and_uiautomator2,
+            should_exit=False
+        )
+
+    def download_and_setup_java_sdk_and_android_sdk_tools(self):
+        self.run_task_in_thread(
+            task=self.logic.download_and_setup_java_sdk_and_android_sdk_tools,
+            should_exit=False
+        )
+
+    def download_and_setup_node_js(self):
+        """
+        Скачиваем, распаковываем архив с бинарниками и библиотеками Node.js, добавляем в PATH.
+        """
+        self.run_task_in_thread(
+            task=self.logic.download_and_setup_node_js,
+            should_exit=False
+        )
+
+    def check_if_is_node_installed(self):
+        """
+        Проверяем установлен ли NODE JS и уведомляем об этом пользователя.
+        """
+        if self.logic.check_if_is_node_installed():
+            messagebox.showinfo("Проверка прошла успешно", "NodeJS уже установлен на вашем ПК.")
+        else:
+            messagebox.showinfo("Требуется установка NodeJS", "NodeJS еще НЕ установлен на вашем ПК\n"
+                                                              "Требуется установка для успешной работы\n"
+                                                              "с установщиком Appium.")
+
+
     def save_default_threads_amount(self):
         self.logic.save_threads_config(num_threads=self.num_threads.get())
 
@@ -225,38 +263,6 @@ class TelegramCheckerUI:
                 messagebox.showerror("Ошибка", "Не удалось перезапустить программу.")
 
 
-    def setup_java_and_sdk(self):
-        self.run_task_in_thread(
-            task=self.logic.setup_java_and_sdk,
-            should_exit=True
-        )
-
-
-    def setup_sdk_packages(self):
-        self.run_task_in_thread(
-            task=self.logic.setup_sdk_packages,
-            should_exit=True
-        )
-
-
-    def setup_build_tools_and_emulator(self):
-        self.run_task_in_thread(
-            task=self.logic.setup_build_tools_and_emulator,
-            should_exit=True
-        )
-
-
-    def remove_variables_and_paths(self):
-        self.run_task_in_thread(
-            task=self.logic.remove_variables_and_paths,
-            should_exit=True
-        )
-
-
-    def verify_environment_setup(self):
-        self.logic.verify_environment_setup()
-
-
     def clear_tools_files_cache(self):
         self.logic.clear_tools_files_cache()
 
@@ -279,7 +285,7 @@ class TelegramCheckerUI:
                 messagebox.showerror("Ошибка", f"Произошла ошибка: {e}")
             finally:
                 self.enable_all_widgets()
-                self.hide_loading_indicator()
+                self.loading_indicator.hide_loading_indicator()
                 if should_exit:
                     self.forced_to_exit_app()
 
@@ -287,28 +293,25 @@ class TelegramCheckerUI:
         self.disable_all_widgets()
 
         # Запускаем задачу в отдельном потоке
-        self.show_loading_indicator()
+        self.loading_indicator.show_loading_indicator()
         thread = threading.Thread(target=task_wrapper, daemon=True)
         thread.start()
-
 
     def start_automation(self):
         """
         Закрывает главное окно, запускает автоматизацию.
         """
         # Отключаем кнопку
-        if self.start_button:
+        if self.logic.verify_environment_setup() and self.start_button:
             self.start_button.config(state=tk.DISABLED)
 
         automation_thread = Thread(target=self.app.run_multithreaded_automation, daemon=True)    # Запускаем автоматизацию
         automation_thread.start()
 
-
     def disable_terminate_button(self):
         # Отключаем кнопку
         if self.close_program_button:
             self.close_program_button.config(state=tk.DISABLED)
-
 
     def reset_all_authorizations(self):
         """
@@ -319,7 +322,6 @@ class TelegramCheckerUI:
             return
         if messagebox.askyesno("Подтверждение", "Вы действительно хотите сбросить\nавторизацию для всех эмуляторов?"):
             self.logic.emulator_auth_config_manager.reset_all_authorizations()
-
 
     def delete_config(self):
         """Удаляет конфигурационный файл с подтверждением пользователя."""
@@ -336,7 +338,6 @@ class TelegramCheckerUI:
             except Exception as e:
                 messagebox.showerror("Ошибка", f"Не удалось удалить конфигурационный файл: {e}")
 
-
     def show_config(self):
         """Открывает окно с содержимым конфигурационного файла."""
         config_content = self.logic.load_config_file_content()
@@ -348,10 +349,9 @@ class TelegramCheckerUI:
             messagebox.showinfo(title="Конфигурация пуста",
                                 message="Конфигурация пуста или файл отсутствует.")
 
-
     def show_existing_avds_list(self):
         """ Открывает окно со списком созданных AVD. """
-        if self.logic.verify_environment_setup(use_logger=True):
+        if self.logic.verify_environment_setup():
             avd_list = self.logic.emulator_manager.get_avd_list()
 
             if avd_list and not avd_list == []:
@@ -360,11 +360,10 @@ class TelegramCheckerUI:
             else:
                 messagebox.showinfo(title="Пустой список AVD", message="Список созданных AVD пуст.")
 
-
     def delete_all_avds(self):
         """ Удаляет все существующие AVD через вызов метода в логике. """
 
-        if self.logic.verify_environment_setup(use_logger=True):
+        if self.logic.verify_environment_setup():
             avd_list = self.logic.emulator_manager.get_avd_list()  # Получаем список AVD
 
             if not avd_list or avd_list == []:
@@ -491,7 +490,7 @@ class TelegramCheckerUI:
 
         # Отключаем все элементы интерфейса
         disable_children(self.root)
-        logger.info("Все элементы интерфейса отключены.")
+        logger.info("--- Все элементы интерфейса отключены. ---")
 
 
     def enable_all_widgets(self):
@@ -515,87 +514,109 @@ class TelegramCheckerUI:
 
         # Включаем все элементы интерфейса
         enable_children(self.root)
-        logger.info("Все элементы интерфейса включены обратно.")
+        logger.info("--- Все элементы интерфейса включены обратно. ---")
+
+
+class LoadingIndicator:
+    def __init__(self, root):
+        """
+        Инициализация класса индикатора загрузки.
+        :param root: Главное окно (tk.Tk).
+        """
+        self.root = root
+        self.loading_overlay = None
+        self.update_job = None  # ID задачи для обновления положения окна
+
+        # Привязка событий для обработки сворачивания и разворачивания
+        self.root.bind("<Unmap>", self._on_root_minimized)
+        self.root.bind("<Map>", self._on_root_restored)
 
 
     def show_loading_indicator(self):
         """
-        Отображает индикатор загрузки поверх интерфейса.
+        Отображает индикатор загрузки поверх основного окна.
         """
-        if self.loading_overlay:
-            return  # Уже отображается
+        if self.loading_overlay and self.loading_overlay.winfo_exists():
+            return  # Окно уже отображается
 
-        # Создаем overlay
+        # Создаем новое окно поверх root
         self.loading_overlay = tk.Toplevel(self.root)
-
-        # Обновление размеров и позиции окна загрузки
-        def update_loading_overlay():
-            root_width = self.root.winfo_width()
-            root_height = self.root.winfo_height()
-
-            # Расчет размеров окна загрузки (15% от размеров root)
-            overlay_width = int(root_width * 0.15)
-            overlay_height = int(root_height * 0.15)
-
-            # Расчет позиции окна загрузки для центрирования
-            overlay_x = self.root.winfo_x() + (root_width - overlay_width) // 2
-            overlay_y = self.root.winfo_y() + (root_height - overlay_height) // 2
-
-            # Установка геометрии окна загрузки
-            self.loading_overlay.geometry(f"{overlay_width}x{overlay_height}+{overlay_x}+{overlay_y}")
-
-            # Запланировать обновление через 10 мс
-            self.loading_overlay.after(10, update_loading_overlay)
-
-        # Запуск обновления размеров и позиции
-        update_loading_overlay()
-
-        self.loading_overlay.overrideredirect(True)  # Убираем рамки окна
-        self.loading_overlay.wm_attributes("-topmost", True)
-        self.loading_overlay.attributes("-alpha", 0.5)  # Полупрозрачность
+        self.loading_overlay.overrideredirect(True)  # Убираем рамки
+        self.loading_overlay.attributes("-topmost", True)  # Всегда наверху
+        self.loading_overlay.attributes("-alpha", 0.8)  # Полупрозрачность
         self.loading_overlay.configure(bg="gray")
 
-        # Закрытие окна загрузки при закрытии основного окна
-        self.root.protocol("WM_DELETE_WINDOW", lambda: (self.loading_overlay.destroy(), self.root.destroy()))
+        # Расчет размеров и позиции окна
+        self._update_overlay_geometry()
 
-        # Центрируем индикатор
-        loading_frame = tk.Frame(self.loading_overlay, bg="gray")
-        loading_frame.place(relx=0.5, rely=0.5, anchor="center")
+        # Фрейм для содержимого
+        frame = tk.Frame(self.loading_overlay, bg="gray")
+        frame.place(relx=0.5, rely=0.5, anchor="center")
 
-        # Кружок загрузки
-        self.loading_label = ttk.Label(loading_frame, text="⏳", font=("Arial", 40))
-        self.loading_label.pack()
+        # Элементы интерфейса (текст и анимация)
+        loading_label = ttk.Label(frame, text="⏳", font=("Arial", 40))
+        loading_label.pack()
+        loading_text = ttk.Label(frame, text="Загрузка...", font=("Arial", 14))
+        loading_text.pack()
 
-        # Надпись
-        self.loading_text = ttk.Label(loading_frame, text="Загрузка...", font=("Arial", 14))
-        self.loading_text.pack()
-
-        # Анимация
-        self.animate_loading_text()
+        # Начинаем обновление положения окна
+        self._schedule_position_update()
 
 
     def hide_loading_indicator(self):
         """
         Скрывает индикатор загрузки.
         """
-        if self.loading_overlay:
-            self.loading_overlay.destroy()
+        if self.update_job:
+            self.root.after_cancel(self.update_job)  # Отменяем обновление позиции
+            self.update_job = None
+
+        if self.loading_overlay and self.loading_overlay.winfo_exists():
+            self.loading_overlay.destroy()  # Уничтожаем окно
             self.loading_overlay = None
 
 
-    def animate_loading_text(self):
+    def _update_overlay_geometry(self):
         """
-        Анимация прозрачности текста.
+        Обновляет размеры и позицию окна загрузки.
         """
-        if not self.loading_overlay:
+        if not self.loading_overlay or not self.loading_overlay.winfo_exists():
             return
 
-        try:
-            current_foreground = self.loading_text["foreground"] or "black"
-            current_alpha = self.loading_text.winfo_rgb(current_foreground)[0] / 65535
-            new_alpha = (current_alpha + 0.1) % 1.0  # Изменение прозрачности
-            new_color = f"#{int(new_alpha * 255):02x}{int(new_alpha * 255):02x}{int(new_alpha * 255):02x}"
-            self.loading_text.config(foreground=new_color)
-            self.root.after(100, self.animate_loading_text)
-        except Exception as e:
-            print(f"Ошибка в анимации: {e}")
+        root_width = self.root.winfo_width()
+        root_height = self.root.winfo_height()
+
+        # Расчет размеров окна загрузки (15% от размеров root)
+        overlay_width = int(root_width * 0.15)
+        overlay_height = int(root_height * 0.15)
+
+        # Расчет позиции окна загрузки для центрирования
+        overlay_x = self.root.winfo_x() + (root_width - overlay_width) // 2
+        overlay_y = self.root.winfo_y() + (root_height - overlay_height) // 2
+
+        # Установка размеров и позиции
+        self.loading_overlay.geometry(f"{overlay_width}x{overlay_height}+{overlay_x}+{overlay_y}")
+
+
+    def _schedule_position_update(self):
+        """
+        Планирует обновление положения окна загрузки.
+        """
+        self._update_overlay_geometry()
+        self.update_job = self.root.after(10, self._schedule_position_update)  # Обновляем каждые 50 мс
+
+
+    def _on_root_minimized(self, event):
+        """
+        Обработчик события сворачивания главного окна.
+        """
+        if self.loading_overlay and self.loading_overlay.winfo_exists():
+            self.loading_overlay.withdraw()  # Скрываем окно загрузки
+
+
+    def _on_root_restored(self, event):
+        """
+        Обработчик события разворачивания главного окна.
+        """
+        if self.loading_overlay and self.loading_overlay.winfo_exists():
+            self.loading_overlay.deiconify()  # Показываем окно загрузки

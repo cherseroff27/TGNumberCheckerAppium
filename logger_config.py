@@ -2,35 +2,16 @@ import logging
 import os
 from logging.handlers import RotatingFileHandler
 from colorlog import ColoredFormatter
-import re
-
-
-class ThreadMessageFilter(logging.Filter):
-    """
-    Фильтр для замены текста ThreadPoolExecutor-0_<номер> на "Поток Номер <номер + 1>" в сообщениях.
-    """
-    thread_message_pattern = re.compile(r"ThreadPoolExecutor-\d+_(\d+)")
-
-    def filter(self, record):
-        # Заменяем все вхождения в тексте сообщения
-        if hasattr(record, "message"):
-            record.message = self.thread_message_pattern.sub(
-                lambda m: f"Поток Номер {int(m.group(1)) + 1}",
-                record.getMessage()
-            )
-        # Также заменяем текст в аргументах, если они есть
-        if record.args:
-            record.args = tuple(
-                self.thread_message_pattern.sub(
-                    lambda m: f"Поток Номер {int(m.group(1)) + 1}", str(arg)
-                ) for arg in record.args
-            )
-        return True
 
 
 class Logger:
     @staticmethod
-    def get_logger(name: str, log_file: str = "application.log", max_bytes: int = 5 * 1024 * 1024, backup_count: int = 3):
+    def get_logger(
+            name: str,
+            log_file: str = "application.log",
+            max_bytes: int = 5 * 1024 * 1024,
+            backup_count: int = 3,
+    ):
         """
         Создает настроенный логгер с цветным и табличным форматированием.
 
@@ -70,8 +51,5 @@ class Logger:
             os.makedirs(log_dir)
         file_handler = RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8")
         logger.addHandler(file_handler)
-
-        # Добавляем фильтр для преобразования сообщений
-        logger.addFilter(ThreadMessageFilter())
 
         return logger
