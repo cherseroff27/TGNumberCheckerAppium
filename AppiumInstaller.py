@@ -3,7 +3,7 @@ import time
 import os
 import re
 
-from LocalVariablesManager import LocalVariablesManager
+from InstallationStateManager import InstallationStateManager
 from PackageManager import PackageManager
 
 from logger_config import Logger
@@ -11,17 +11,62 @@ logger = Logger.get_logger(__name__)
 
 
 class AppiumInstaller:
-    def __init__(self, node_dir):
+    def __init__(self, base_project_dir):
         """
         Инициализация путей и команд для локальной установки.
         """
+        self.node_command = "node"
         self.npm_command = "npm"
         self.appium_command = "appium"
 
-        self.node_dir = node_dir
-
-        self.local_variables_manager = LocalVariablesManager()
         self.package_manager = PackageManager()
+
+        self.state_file_path = os.path.join(base_project_dir, "appium_tools_installation_state.json")
+        self.installation_state_manager = InstallationStateManager(self.state_file_path)
+
+
+    def setup_all(self):
+        """Комплексная установка всех компонентов."""
+        self.initial_environment_setup()
+
+
+    def initial_environment_setup(self):
+        """Выполняет настройку локальных переменных среды для всех инструментов."""
+        logger.info("Проверка наличия необходимых компонентов...")
+
+        if not self.package_manager.fetch_package_version(self.node_command):
+            raise RuntimeError("Node.js не установлен. Установите его перед запуском.")
+
+        if not self.package_manager.fetch_package_version(self.npm_command):
+            raise RuntimeError("Npm не установлен. Убедитесь, что он доступен.")
+
+        self._ensure_tool(
+            setup_function=self.install_appium,
+            tool_key="appium_installed_path_key",
+        )
+        self._ensure_tool(
+            setup_function=self.install_uiautomator2_driver,
+            tool_key="uiautomator2_driver_installed_path_key",
+        )
+
+
+    def _ensure_tool(self, setup_function, tool_key):
+        """Убедиться, что инструмент установлен, и при необходимости выполнить установку."""
+        if not self._load_tool(tool_key):
+            setup_function()
+
+
+    def _load_tool(self, tool_key):
+        """Загружает инструмент из состояния или выполняет установку."""
+        is_tool_installed = self.installation_state_manager.get_installed_component_flag(tool_key)
+
+        if not is_tool_installed:
+            logger.info(f"Инструмент '{tool_key}' имеет флаг установки {is_tool_installed}, требуется установка. Начинаем установку...")
+            self.installation_state_manager.remove_installed_component(tool_key)
+            return False
+
+        logger.info(f"Флаг установки инструмента '{tool_key}': {is_tool_installed}")
+        return True
 
 
     def fetch_appium_version(self):
@@ -31,15 +76,6 @@ class AppiumInstaller:
 
     def is_uiautomator2_driver_installed(self):
         """ Проверяет, установлен ли UIAutomator2 driver. """
-        command = [self.appium_command, "driver", "list"]
-        uiautomator2_driver_package_name = "uiautomator2"
-        return self.package_manager.is_package_installed(command, uiautomator2_driver_package_name)
-
-
-    def install_uiautomator2_driver(self):
-        """
-        Устанавливает или обновляет драйвер UIAutomator2.
-        """
         try:
             logger.info("Проверка состояния драйвера UIAutomator2...")
             result = subprocess.run(
@@ -47,77 +83,106 @@ class AppiumInstaller:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                shell=True,
             )
-            logger.info(f"Результат команды: {result.stdout}")
 
-            if re.search(r"uiautomator2", result.stdout, re.IGNORECASE):
-                logger.info("Драйвер UIAutomator2 уже установлен. Выполняется обновление...")
-                subprocess.check_call(
-                    [self.appium_command, "driver", "update", "uiautomator2"],
-                    text=True,
-                    shell=True
-                )
-                logger.info("Драйвер UIAutomator2 успешно обновлён.")
+            # Логирование вывода
+            logger.info("STDOUT:" + result.stdout)
+            logger.info("STDERR:" + result.stderr)
+
+            if re.search(r"uiautomator2", result.stdout, re.IGNORECASE) or re.search(r"uiautomator2", result.stderr, re.IGNORECASE):
+                return True
             else:
-                logger.info("Установка драйвера UIAutomator2...")
-                subprocess.check_call(
+                return False
+
+        except Exception as e:
+            raise RuntimeError(f"Ошибка проверки наличия UIAutomator2 driver: {e}")
+
+
+    def install_uiautomator2_driver(self):
+        """
+        Устанавливает или обновляет драйвер UIAutomator2.
+        """
+        if not self.is_uiautomator2_driver_installed():
+            self.installation_state_manager.remove_installed_component("uiautomator2_driver_installed_path_key")
+
+            try:
+                logger.info("Драйвер UIAutomator2 еще НЕ установлен. Требуется установка...")
+                result = subprocess.run(
                     [self.appium_command, "driver", "install", "uiautomator2"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
                     text=True,
                     shell=True
                 )
+
+                # Логирование вывода
+                logger.info("STDOUT:" + result.stdout)
+                logger.info("STDERR:" + result.stderr)
+
                 logger.info("Драйвер UIAutomator2 успешно установлен.")
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Ошибка установки/обновления драйвера UIAutomator2: {e}")
-            raise RuntimeError(f"Ошибка установки/обновления драйвера UIAutomator2: {e}")
+
+                self.installation_state_manager.add_installed_component_by_flag("uiautomator2_driver_installed_path_key", True)
+            except Exception as e:
+                raise RuntimeError(f"Ошибка установки драйвера UIAutomator2: {e}")
+        else:
+            logger.info("Драйвер Uiautomator2 уже установлен. Установка не требуется.")
+            self.installation_state_manager.add_installed_component_by_flag("uiautomator2_driver_installed_path_key", True)
 
 
     def install_appium(self):
         """
         Устанавливает Appium в локальную директорию.
         """
-        if not self.package_manager.check_command_availability(self.appium_command):
-            logger.info("Appium не найден. Выполняется установка...")
+        if not self.fetch_appium_version():
+            self.installation_state_manager.remove_installed_component("appium_installed_path_key")
+
             logger.info(f"Запускаю команду: {self.npm_command} install -g appium")
             try:
-                subprocess.check_call(
+                result = subprocess.run(
                     [self.npm_command, "install", "-g", "appium"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
                     text=True,
                     shell=True
                 )
+
+                # Логирование вывода
+                logger.info("STDOUT:" + result.stdout)
+                logger.info("STDERR:" + result.stderr)
+
                 logger.info("Appium успешно установлен.")
-            except subprocess.CalledProcessError as e:
+
+                self.installation_state_manager.add_installed_component_by_flag("appium_installed_path_key", True)
+
+            except Exception as e:
                 raise RuntimeError(f"Ошибка установки Appium: {e}")
 
-
-    def setup_appium_and_uiautomator2(self):
-        """
-        Основной метод для проверки и установки Appium и его зависимостей.
-        """
-        logger.info("Проверка наличия необходимых компонентов...")
-
-        adb_package_name = "adb"
-        if not self.package_manager.fetch_package_version(adb_package_name):
-            raise RuntimeError("adb не установлен. Убедитесь, что он доступен.")
-
-        node_path = "node"
-        npm_path = "npm"
-
-        self.package_manager.check_tool_availability(node_path)
-        self.package_manager.check_tool_availability(npm_path)
-
-        if not self.package_manager.fetch_package_version(node_path):
-            raise RuntimeError("Node.js не установлен. Установите его перед запуском.")
-
-        if not self.package_manager.fetch_package_version(npm_path):
-            raise RuntimeError("npm не установлен. Убедитесь, что он доступен.")
-
-        if self.fetch_appium_version() is None:
-            logger.info("Appium или драйвер uiautomator2 не установлены. Выполняется установка...")
-            self.install_appium()
-            self.install_uiautomator2_driver()
-            logger.info("Установка завершена.")
         else:
-            logger.info("Appium и драйвер uiautomator2 уже установлены. Установка не требуется.")
+            logger.info("Appium уже установлен. Установка не требуется.")
+            self.installation_state_manager.add_installed_component_by_flag("appium_installed_path_key", True)
+
+
+    def are_required_flags_set(self):
+        """
+        Проверяет, установлены ли флаги для ключей appium_installed_path_key и
+        uiautomator2_driver_installed_path_key в True.
+
+        :return: True, если оба флага установлены в True. False в противном случае.
+        """
+        appium_flag = self.installation_state_manager.get_installed_component_flag("appium_installed_path_key")
+        uiautomator2_flag = self.installation_state_manager.get_installed_component_flag("uiautomator2_driver_installed_path_key")
+
+        if appium_flag and uiautomator2_flag:
+            logger.info("Все необходимые флаги установлены в True.")
+            return True
+        else:
+            logger.warning(
+                "Не все необходимые флаги установлены:\n"
+                f"appium_installed_path_key={appium_flag}\n, "
+                f"uiautomator2_driver_installed_path_key={uiautomator2_flag}."
+            )
+            return False
 
 
 class AppiumServerController:

@@ -18,7 +18,7 @@ JAVA_URL = "https://github.com/adoptium/temurin17-binaries/releases/download/jdk
 
 
 class AndroidToolManager:
-    def __init__(self, base_project_dir, tools_dir, sdk_dir, java_dir, temp_files_dir):
+    def __init__(self, base_project_dir, sdk_dir, java_dir, temp_files_dir):
         self.sdk_dir = sdk_dir
         self.java_dir = java_dir
 

@@ -59,6 +59,17 @@ class InstallationStateManager:
         self.save_state()
 
 
+    def add_installed_component_by_flag(self, installed_component_name, is_installed: bool):
+        """
+        Добавляет компонент в состояние, используя булево значение вместо пути.
+        """
+        if installed_component_name in self.state:
+            logger.warning(f"Компонент '{installed_component_name}' уже существует в конфиге. Перезаписываю статус.")
+        self.state[installed_component_name] = is_installed
+        logger.info(f"Добавлен компонент '{installed_component_name}' с состоянием '{is_installed}'.")
+        self.save_state()
+
+
     def get_installed_component_path(self, installed_component_name):
         """
         Возвращает путь к указанному компоненту по ключу.
@@ -67,6 +78,21 @@ class InstallationStateManager:
             return self.state[installed_component_name]
         logger.warning(f"Компонент '{installed_component_name}' не найден в конфиге.")
         return None
+
+
+    def get_installed_component_flag(self, installed_component_name):
+        """
+        Возвращает булево значение состояния компонента по ключу.
+        """
+        if installed_component_name in self.state:
+            value = self.state[installed_component_name]
+            if isinstance(value, bool):
+                return value
+            else:
+                logger.warning(f"Компонент '{installed_component_name}' найден, но его значение не является булевым.")
+        else:
+            logger.warning(f"Компонент '{installed_component_name}' не найден в конфиге.")
+        return False  # Возвращает False, если компонент отсутствует или имеет некорректное значение
 
 
     def remove_installed_component(self, installed_component_name):

@@ -55,8 +55,10 @@ class TelegramCheckerUI:
 
         self.widget_states = {}
 
-        self.logic.download_and_setup_java_sdk_and_android_sdk_tools()
-        self.logic.download_and_setup_node_js()
+        self.run_task_in_thread(
+            task=self.logic.setup_all_tools,
+            should_exit=False
+        )
 
 
     def create_widgets(self):
@@ -81,13 +83,13 @@ class TelegramCheckerUI:
         second_level_top_buttons_inner_frame = tk.Frame(top_buttons_frame)
         second_level_top_buttons_inner_frame.pack(anchor="center")
 
-        tk.Label(second_level_top_buttons_inner_frame, text="Установка/удаление инструментов SDK/JDK их системных переменных и конфига\nУстановка Node JS и Appium Server:", font=self.header_font).pack(pady=5)
-        tk.Button(second_level_top_buttons_inner_frame, text="Установить\nкомпоненты\nSDK/JDK", font=self.custom_font, justify="center", command=self.download_and_setup_java_sdk_and_android_sdk_tools).pack(side="left", padx=5)
-        tk.Button(second_level_top_buttons_inner_frame, text="Скачать, установить\nNODE JS, добавить в\nпеременные среды", font=self.custom_font, justify="center", command=self.download_and_setup_node_js).pack(side="left", padx=5)
-        tk.Button(second_level_top_buttons_inner_frame, text="Проверить\nустановлен ли\nNODE JS", font=self.custom_font, justify="center", command=self.check_if_is_node_installed).pack(side="left", padx=5)
-        tk.Button(second_level_top_buttons_inner_frame, text="Вывести в лог\ncписок локальных\nпеременных среды", font=self.custom_font, justify="center", command=self.get_all_local_environ_variables).pack(side="left", padx=5)
-        tk.Button(second_level_top_buttons_inner_frame, text="Установить\nAppium,\nUIAutomator2", font=self.custom_font, justify="center", command=self.setup_appium_and_uiautomator2).pack(side="left", padx=5)
-        tk.Button(second_level_top_buttons_inner_frame, text="Очистить папку\nTEMP_FILES\n(кэш файлов\ncmdline-tools\nNode.js и jdk)",font=self.custom_font, justify="center", command=self.clear_tools_files_cache).pack(side="left", padx=5)
+        tk.Label(second_level_top_buttons_inner_frame, text="Установка/удаление инструментов SDK/JDK их системных переменных и конфига", font=self.header_font).pack(pady=5)
+        tk.Button(second_level_top_buttons_inner_frame, text="Установить SDK/JDK", font=self.custom_font, justify="center", command=self.download_and_setup_java_sdk_and_android_sdk_tools).pack(side="left", padx=5)
+        tk.Button(second_level_top_buttons_inner_frame, text="Установить\nAppium, UIAutomator2", font=self.custom_font, justify="center", command=self.setup_appium_and_uiautomator2).pack(side="left", padx=5)
+        # tk.Button(second_level_top_buttons_inner_frame, text="Скачать, установить\nNODE JS, добавить в\nпеременные среды", font=self.custom_font, justify="center", command=self.download_and_setup_node_js).pack(side="left", padx=5)
+        # tk.Button(second_level_top_buttons_inner_frame, text="Проверить\nустановлен ли\nNODE JS", font=self.custom_font, justify="center", command=self.check_if_is_node_installed).pack(side="left", padx=5)
+        tk.Button(second_level_top_buttons_inner_frame, text="Вывести в лог cписок\nлокальных переменных среды", font=self.custom_font, justify="center", command=self.get_all_local_environ_variables).pack(side="left", padx=5)
+        tk.Button(second_level_top_buttons_inner_frame, text="Очистить папку TEMP_FILES\n(кэш файлов cmdline-tools и java jdk)",font=self.custom_font, justify="center", command=self.clear_tools_files_cache).pack(side="left", padx=5)
 
         # Файл Excel
         tk.Label(self.root, text="Файл таблицы Excel:", font=self.header_font).pack(pady=1)
@@ -302,11 +304,11 @@ class TelegramCheckerUI:
         Закрывает главное окно, запускает автоматизацию.
         """
         # Отключаем кнопку
-        if self.logic.verify_environment_setup() and self.start_button:
+        if self.logic.verify_environment_setup() and self.logic.are_required_flags_set() and self.start_button:
             self.start_button.config(state=tk.DISABLED)
 
-        automation_thread = Thread(target=self.app.run_multithreaded_automation, daemon=True)    # Запускаем автоматизацию
-        automation_thread.start()
+            automation_thread = Thread(target=self.app.run_multithreaded_automation, daemon=True)    # Запускаем автоматизацию
+            automation_thread.start()
 
     def disable_terminate_button(self):
         # Отключаем кнопку
@@ -542,9 +544,12 @@ class LoadingIndicator:
         # Создаем новое окно поверх root
         self.loading_overlay = tk.Toplevel(self.root)
         self.loading_overlay.overrideredirect(True)  # Убираем рамки
-        self.loading_overlay.attributes("-topmost", True)  # Всегда наверху
         self.loading_overlay.attributes("-alpha", 0.8)  # Полупрозрачность
         self.loading_overlay.configure(bg="gray")
+
+        # Привязка окна к root (делает его дочерним)
+        self.loading_overlay.transient(self.root)
+        self.loading_overlay.grab_set()  # Блокирует взаимодействие с root
 
         # Расчет размеров и позиции окна
         self._update_overlay_geometry()
@@ -606,7 +611,7 @@ class LoadingIndicator:
         self.update_job = self.root.after(10, self._schedule_position_update)  # Обновляем каждые 50 мс
 
 
-    def _on_root_minimized(self, event):
+    def _on_root_minimized(self):
         """
         Обработчик события сворачивания главного окна.
         """
@@ -614,7 +619,7 @@ class LoadingIndicator:
             self.loading_overlay.withdraw()  # Скрываем окно загрузки
 
 
-    def _on_root_restored(self, event):
+    def _on_root_restored(self):
         """
         Обработчик события разворачивания главного окна.
         """

@@ -152,21 +152,20 @@ class TGAppiumEmulatorAutomationApp:
         self.root = tk.Tk()
 
         self.android_tool_manager = AndroidToolManager(
-            tools_dir=DEFAULT_TOOLS_DIR,
             temp_files_dir=DEFAULT_TEMP_FILES_DIR,
             sdk_dir=DEFAULT_SDK_DIR,
             java_dir=DEFAULT_JAVA_DIR,
             base_project_dir=BASE_PROJECT_DIR,
         )
 
-        self.node_js_installer = NodeJsInstaller(
-            node_dir=DEFAULT_NODE_DIR,
-            temp_files_dir=DEFAULT_TEMP_FILES_DIR,
-            base_project_dir=BASE_PROJECT_DIR,
-        )
+        # self.node_js_installer = NodeJsInstaller(
+        #     node_dir=DEFAULT_NODE_DIR,
+        #     temp_files_dir=DEFAULT_TEMP_FILES_DIR,
+        #     base_project_dir=BASE_PROJECT_DIR,
+        # )
 
         self.appium_installer = AppiumInstaller(
-            node_dir=DEFAULT_NODE_DIR,
+            base_project_dir=BASE_PROJECT_DIR
         )
 
         self.emulator_manager = EmulatorManager()
@@ -178,9 +177,8 @@ class TGAppiumEmulatorAutomationApp:
             default_excel_dir=DEFAULT_EXCEL_TABLE_DIR,
             avd_list_info_config_file=EmulatorAuthConfigManager.CONFIG_FILE,
             emulator_manager= self.emulator_manager,
-            node_js_installer=self.node_js_installer,
             android_tool_manager=self.android_tool_manager,
-            appium_installer=self.appium_installer,
+            appium_installer=self.appium_installer
         )
 
         self.ui = TelegramCheckerUI(self.root, self.logic, self)

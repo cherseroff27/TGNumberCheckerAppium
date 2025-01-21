@@ -97,39 +97,32 @@ class PackageManager:
     def fetch_package_version(package_name):
         """Проверяет, установлен ли компонент в системных переменных."""
         try:
-            env = os.environ.copy()
-
             result = subprocess.run(
                 [package_name, "--version"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                env=env,
                 text=True,
+                shell=True,
             )
-            print("STDOUT:", result.stdout)
-            print("STDERR:", result.stderr)
+            # Логирование вывода
+            logger.info("STDOUT:" + result.stdout)
 
+            # Проверка кода завершения
             if result.returncode != 0:
                 raise RuntimeError(f"Ошибка выполнения команды: {result.stderr.strip()}")
 
-            logger.info(f"{package_name} уже установлен.\nВерсия: {result.stdout.strip()}")
+            logger.info(f"{package_name} уже установлен.\tВерсия: {result.stdout.strip()}")
             return True
+
+        # Обработка ошибки, если команда не найдена в системном пути
         except FileNotFoundError:
-            logger.info(f"{package_name} не найден / еще не установлен.")
+            logger.error(f"{package_name} не найден или не установлен. Проверьте переменные среды PATH.")
             return False
 
-
-    @staticmethod
-    def check_tool_availability(tool):
-        result = subprocess.run(
-            ["where", tool],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        print(f"Результат проверки {tool}:")
-        print("STDOUT:", result.stdout)
-        print("STDERR:", result.stderr)
+        # Обработка других ошибок, если subprocess не удается выполнить
+        except Exception as e:
+            logger.error(f"Произошла ошибка при попытке проверить {package_name}: {str(e)}")
+            return False
 
 
     @staticmethod
