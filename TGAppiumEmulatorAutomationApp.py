@@ -60,6 +60,9 @@ class ThreadSafeExcelProcessor:
         self.lock = Lock()
         self.processed_numbers = self.load_processed_numbers()
         logger.info(f"Загружено {len(self.processed_numbers)} обработанных номеров.")
+
+        self.filter_unprocessed_numbers()  # Фильтруем номера, уже записанные в экспортный файл
+
         self.is_numbers_ended = False
 
     def load_processed_numbers(self):
@@ -123,7 +126,7 @@ class ThreadSafeExcelProcessor:
             else:
                 current_data = pd.DataFrame(columns=self.excel_data_builder.df.columns)
 
-            if normalized_row_number in current_data['Телефон Ответчика'].str.strip().apply(self.normalize_phone_number).values:
+            if normalized_row_number in self.processed_numbers:
                 logger.debug(f"[{thread_name}] Номер {normalized_row_number} уже существует, пропускаем.")
                 return
 
@@ -541,6 +544,7 @@ class TGAppiumEmulatorAutomationApp:
             logger.error(f"[{thread_name}] Ошибка при очистке ресурсов: {e}")
         finally:
             logger.info(f"[{thread_name}] Завершение программы.")
+            ui.start_button.config(state=tk.NORMAL)
             sys.exit(0)
 
 

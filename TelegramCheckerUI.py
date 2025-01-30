@@ -611,7 +611,7 @@ class LoadingIndicator:
         self.update_job = self.root.after(10, self._schedule_position_update)  # Обновляем каждые 50 мс
 
 
-    def _on_root_minimized(self):
+    def _on_root_minimized(self, event):
         """
         Обработчик события сворачивания главного окна.
         """
@@ -619,9 +619,12 @@ class LoadingIndicator:
             self.loading_overlay.withdraw()  # Скрываем окно загрузки
 
 
-    def _on_root_restored(self):
+    def _on_root_restored(self, event):
         """
         Обработчик события разворачивания главного окна.
         """
-        if self.loading_overlay and self.loading_overlay.winfo_exists():
-            self.loading_overlay.deiconify()  # Показываем окно загрузки
+        try:
+            if self.loading_overlay and self.loading_overlay.winfo_exists():
+                self.loading_overlay.deiconify()  # Показываем окно загрузки
+        except Exception as ex:
+            logger.info(ex)

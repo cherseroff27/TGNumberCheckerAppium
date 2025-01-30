@@ -51,6 +51,7 @@ class TelegramCheckerUILogic:
 
     def setup_all_tools(self):
         self.android_tool_manager.setup_all()
+        self.android_tool_manager.restart_adb_server()
         self.appium_installer.setup_all()
 
 
